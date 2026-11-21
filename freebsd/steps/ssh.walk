@@ -9,7 +9,7 @@ walkthrough "freebsd 15.1 - sshd, XFCE, and a desktop"
 
   step "boot the disk"
     boot == true
-    memory_mb == 8192
+    memory_mb == 6144
     os == bsd
     timeout == 900
   step "wait for sshd"

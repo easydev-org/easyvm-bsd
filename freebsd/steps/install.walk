@@ -13,7 +13,7 @@ walkthrough "freebsd 15.1 - bsdinstall, to an installed system"
   step "boot the installer"
     boot == true
     iso == freebsd.iso
-    memory_mb == 8192
+    memory_mb == 6144
     os == bsd
     timeout == 1800
   step "wait for the installer menu"
