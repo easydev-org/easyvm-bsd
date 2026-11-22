@@ -64,10 +64,11 @@ jobs:
     # MEASURED, on run 43628110384: dispatched with `from_tag=bsd-freebsd-install`, and the install job
     # was `in_progress` at step 10 within three minutes.
     if: github.event_name != 'workflow_dispatch' || inputs.from_tag == ''
-    uses: easydev-org/easyvm/.github/workflows/stage.yml@main
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.2
     secrets: inherit
     with:
       image_repository: easydev-org/easyvm
+      image_tag: v0.0.2
       disk_gb: "10"
       group: freebsd
       disks_repository: ${{ inputs.disks_repository }}
@@ -87,10 +88,11 @@ jobs:
   ssh:
     needs: [install]
     if: always() && !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.from_tag == '' || inputs.from_tag == 'bsd-freebsd-install')
-    uses: easydev-org/easyvm/.github/workflows/stage.yml@main
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.2
     secrets: inherit
     with:
       image_repository: easydev-org/easyvm
+      image_tag: v0.0.2
       disk_gb: "10"
       group: freebsd
       disks_repository: ${{ inputs.disks_repository }}
@@ -109,10 +111,11 @@ jobs:
   vm:
     needs: [ssh]
     if: always() && !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.from_tag == '' || inputs.from_tag == 'bsd-freebsd-install' || inputs.from_tag == 'bsd-freebsd-ssh')
-    uses: easydev-org/easyvm/.github/workflows/stage.yml@main
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.2
     secrets: inherit
     with:
       image_repository: easydev-org/easyvm
+      image_tag: v0.0.2
       disk_gb: "10"
       group: freebsd
       disks_repository: ${{ inputs.disks_repository }}
