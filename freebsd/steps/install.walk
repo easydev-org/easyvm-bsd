@@ -28,7 +28,12 @@ step "boot the installer"
 
 step "wait for the installer menu"
   repeat
-    pause 10
+    do
+      item
+        settle 10
+      item "read the screen"
+        read
+          name pane
     until
       bind menu_up
       source pane
@@ -71,7 +76,12 @@ step "partitioning - automatic ufs"
 
 step "wait for the partitioning menu before choosing on it"
   repeat
-    pause 6
+    do
+      item
+        settle 6
+      item "read the screen"
+        read
+          name partmenu
     until
       bind part_showing
       source partmenu
@@ -100,7 +110,12 @@ step "partition scheme - GPT, which is what makes this disk UEFI bootable"
 
 step "wait for the partition editor"
   repeat
-    pause 6
+    do
+      item
+        settle 6
+      item "read the screen"
+        read
+          name parted
     until
       bind parted_showing
       source parted
@@ -177,7 +192,12 @@ step "wait for the install to finish"
   #
   # `rect` covers the dialog box; `scale: 4` is the enlargement that was measured to work.
   repeat
-    pause 15
+    do
+      item
+        settle 15
+      item "read the screen"
+        read
+          name done
     until
       bind finished
       source done
@@ -267,7 +287,12 @@ step "open a shell in the new system"
 
 step "prove the chroot shell is actually up before typing into it"
   repeat
-    pause 5
+    do
+      item
+        settle 5
+      item "read the screen"
+        read
+          name chroot
     until
       bind shell_up
       source chroot

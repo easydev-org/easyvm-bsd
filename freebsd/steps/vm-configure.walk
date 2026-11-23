@@ -43,7 +43,12 @@ step "the session is running"
 
 step "wait for the desktop"
   repeat
-    pause 10
+    do
+      item
+        settle 10
+      item "read the screen"
+        read
+          name desk
     until
       bind ready
       source desk
