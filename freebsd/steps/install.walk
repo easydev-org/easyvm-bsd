@@ -402,39 +402,76 @@ step "bootstrap pkg, which is a stub until it downloads itself once"
       settle 6
 
 step "install the desktop, sudo and their packages while this shell is root"
-  # THE INSTALL IS WAITED FOR, NOT GUESSED. This was `settle 60` and then the next command was
-  # typed into a shell that was still working: MEASURED, the 862 MiB disk from run 45166291801
-  # carried libxfce4util but no /usr/local/share/xsessions/xfce.desktop and no startxfce4, while the
-  # 2346 MiB disk from the run before it carried a whole desktop - and the only change between them
-  # was `-smp 4`, which made pkg spend longer unpacking the same packages.
+  # THE PROOF IS `pkg info`'s EXIT CODE, MADE VISIBLE. Two things were wrong and they hid each other.
   #
-  # SO THE COMMAND ITSELF BLOCKS UNTIL THE LAST PACKAGE IS REGISTERED, and the step that follows can
-  # read a prompt that means "finished" rather than a prompt that means "still running".
+  # THE WAIT WAS A GUESS. This used to type `pkg install` and then `settle 60` before the next
+  # command, which assumed the install finished inside a minute. MEASURED, two runs one commit apart
+  # differ in exactly `-smp 4`:
+  #
+  #	45156606198   one vCPU    bsd-freebsd-install.qcow2  2346 MiB   complete desktop
+  #	45166291801   four vCPU   bsd-freebsd-install.qcow2   862 MiB   no xfce.desktop
+  #
+  # READ FROM THE PUBLISHED DISK: the 862 MiB image carries libxfce4util and gtk-3 and NO
+  # /usr/local/share/xsessions/xfce.desktop - the packages were still being unpacked when the walk
+  # moved on. Four vCPUs made that window longer, not shorter, because more unpacking runs at once.
+  #
+  # AND THE POLL THAT WAS SUPPOSED TO CATCH IT WAS NEVER READ. The original typed a `sh -c 'while
+  # pkg info ...'` loop and then `settle 40` - but nothing ever LOOKED at what it printed, so a disk
+  # with no Xorg answered all 62 steps. That is why 862 MiB passed.
+  #
+  # SO THE INSTALL RUNS IN THE BACKGROUND AND THE QUESTION IS WHAT WAITS. `&` returns the shell to
+  # its prompt at once, so the typed question is received as a command rather than landing in the
+  # middle of a running installer's output - which is what happens with a foreground install and a
+  # fixed wait. `pkg info` returns 0 only for a package that is REGISTERED, which happens after
+  # unpacking finishes; `&&`/`||` turn that into a word on the screen and `until:` waits for it.
   do
     item
-      settle 4
+      settle 2
     item
-      input text "sh -c 'env ASSUME_ALWAYS_YES=yes pkg install -y sudo xorg xf86-video-scfb xf86-input-libinput xfce lightdm lightdm-gtk-greeter >/tmp/pkg.log 2>&1; i=0; while [ $i -lt 120 ]; do pkg info xfce >/dev/null 2>&1 && pkg info xfce4-session >/dev/null 2>&1 && pkg info sudo >/dev/null 2>&1 && pkg info lightdm >/dev/null 2>&1 && break; sleep 10; i=$((i+1)); done; echo PKG-READY'"
+      input text "env ASSUME_ALWAYS_YES=yes pkg install -y sudo xorg xf86-video-scfb xf86-input-libinput xfce lightdm lightdm-gtk-greeter >/tmp/pkg.log 2>&1 &"
     item
       input ret
-    item
-      settle 5
+      settle 8
+
+step "the four packages are registered, which is the only proof of a finished install"
+  # `pkg info` IS THE PACKAGE MANAGER'S OWN RECORD, and it exists only once unpacking finished - so
+  # this is the question the fixed wait was standing in for. The marker is printed on every attempt,
+  # so a failure reads as PKG-MISSING for 120 rounds and then fails with the screen beside it.
+  repeat
+    do
+      item "ask pkg whether the four packages are registered"
+        input text "pkg info sudo >/dev/null 2>&1 && pkg info xfce >/dev/null 2>&1 && pkg info xfce4-session >/dev/null 2>&1 && pkg info lightdm >/dev/null 2>&1 && echo PKG-OK || echo PKG-MISSING"
+      item
+        input ret
+        settle 15
+      item "read the screen"
+        read
+          name pkgstate
+    until
+      bind packages_ready
+      source pkgstate
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      words [[PKG-OK]]
+    max 120
+    pause 10
+
 
 step "prove the desktop actually landed"
-  # THIS STEP USED TO TYPE `ls` AND LOOK AT NOTHING. It was a `do:` with four items and no `until:`,
-  # so it passed whether the files were there or not - and MEASURED on the 862 MiB disk from run
-  # 45166291801, `/usr/local/share/xsessions/xfce.desktop` was ABSENT while the walk reported every
-  # one of its 62 steps answered. A check that cannot fail is worse than no check.
+  # THE ARTIFACT, READ BACK FROM THE DISK THAT WILL BE PUBLISHED. `pkg info` says the packages are
+  # registered; these four files are what the next stage and a human look for, and a package that
+  # registered while its post-install hook failed leaves the first fact true and this one false.
   #
-  # SO IT ASKS THE SHELL A QUESTION AND WAITS FOR THE ANSWER. The command prints a marker only when
-  # all four files exist.
+  # THIS REPLACES A `do:` THAT TYPED `ls` AND READ NOTHING. It had no `until:` and no `check:`, so a
+  # disk with no xfce.desktop answered it - which is how the 862 MiB run passed all 62 steps.
   repeat
     do
       item "ask whether the desktop's files are on disk"
-        input text "sh -c 'ls /usr/local/share/xsessions/xfce.desktop /usr/local/bin/Xorg /usr/local/sbin/lightdm /usr/local/bin/sudo >/dev/null 2>&1 && echo DESKTOP-OK || echo DESKTOP-MISSING'"
+        input text "ls /usr/local/share/xsessions/xfce.desktop /usr/local/bin/Xorg /usr/local/sbin/lightdm /usr/local/bin/sudo >/dev/null 2>&1 && echo DESKTOP-OK || echo DESKTOP-MISSING"
       item
         input ret
-        settle 6
+        settle 8
       item "read the screen"
         read
           name desktop
@@ -445,8 +482,9 @@ step "prove the desktop actually landed"
       rect [0, 0, 1920, 1080]
       rect_at [1920, 1080]
       words [[DESKTOP-OK]]
-    max 40
+    max 30
     pause 5
+
 
 step "let the account escalate without a password"
   do
