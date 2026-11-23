@@ -1,0 +1,72 @@
+name: freebsd
+
+# freebsd, AS A CHAIN OF JOBS THAT DEPEND ON EACH OTHER.
+#
+# THE SHAPE IS THE ONE THE OTHER DISTRIBUTIONS USE, AND THE REASON IS THE SAME ONE: the legs used to
+# run as a parallel matrix, and a leg that asks for the tag the leg before it publishes gets a 404
+# while that leg is still running. It then falls back to the INSTALL disk - which has no desktop - and burns its whole
+# budget on a machine that could never answer.
+#
+# `needs:` IS THE FIX. A leg cannot start before the artifact it pulls exists, because it is not
+# SCHEDULED until then. The cost is the sum rather than the maximum, and a serial chain that finishes
+# is worth more than a parallel one whose third leg always times out.
+#
+# FREEBSD REPLACES GHOSTBSD, AND THE MEASUREMENT THAT DECIDED IT IS IN THE ESP:
+#
+#	FreeBSD 15.1  EFI/BOOT/BOOTX64.EFI  665600 bytes, first16 = 4d5a90000300000004000000ffff0000
+#	GhostBSD 26.3 EFI/BOOT/BOOTX64.EFI       0 bytes
+#
+# GhostBSD's GBI writes a ZERO-BYTE boot loader into the EFI system partition, so UEFI cannot load
+# the installed system and the machine falls back to the install CD. That is a defect in GBI that no
+# walkthrough can repair - the disk it leaves is not bootable. FreeBSD's `bsdinstall` writes a real
+# MZ/PE executable, and a disk from this chain boots to `login:` with no CD attached.
+#
+# FREEBSD IS NOT THE CHEAPER VERSION OF GHOSTBSD EITHER: both are the same base system, and FreeBSD
+# additionally has a SCRIPTED installer (`bsdinstall script`) whose preamble is a file rather than a
+# sequence of dialogs.
+#
+
+on:
+  # ONE STAGE, DISPATCHED BY HAND. This was a job inside `freebsd.yml`, where `needs:` decided the
+  # order; each stage is its own workflow now.
+  workflow_dispatch:
+    inputs:
+      disks_repository:
+        description: "the ghcr repository that holds the disks"
+        default: "easydev-org/easyvm-bsd"
+      from_tag:
+        description: >-
+          the PUBLISHED disk this stage continues from (default bsd-freebsd-ssh)
+        default: "bsd-freebsd-ssh"
+
+concurrency:
+  group: freebsd-vm-configure
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  checks: write
+
+jobs:
+  vm:
+    needs: [ssh]
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.2
+    secrets: inherit
+    with:
+      image_repository: easydev-org/easyvm
+      image_tag: v0.0.2
+      disk_gb: "10"
+      group: freebsd
+      disks_repository: ${{ inputs.disks_repository }}
+      stages: |
+        [
+          {
+            "name": "bsd-freebsd-vm",
+            "file": "freebsd/steps/vm-configure.walk",
+            "pull": "${{ inputs.from_tag }}",
+            "out": "bsd-freebsd-vm.qcow2",
+            "publish": "bsd-freebsd-vm",
+            "timeout": 60
+          }
+        ]
