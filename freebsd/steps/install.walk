@@ -435,12 +435,31 @@ step "install the desktop, sudo and their packages while this shell is root"
 
 step "the four packages are registered, which is the only proof of a finished install"
   # `pkg info` IS THE PACKAGE MANAGER'S OWN RECORD, and it exists only once unpacking finished - so
-  # this is the question the fixed wait was standing in for. The marker is printed on every attempt,
-  # so a failure reads as PKG-MISSING for 120 rounds and then fails with the screen beside it.
+  # this is the question the fixed wait was standing in for.
+  #
+  # THE SCREEN IS CLEARED BEFORE EACH ANSWER, AND THAT IS THE WHOLE FIX. MEASURED on run 45172456752,
+  # which ran this loop for fifty minutes on a disk where THE INSTALL HAD SUCCEEDED:
+  #
+  #	# pkg info sudo ... && echo PKG-OK || echo PKG-MISSING
+  #	PKG-MISSING
+  #	# pkg info sudo ... && echo PKG-OK || echo PKG-MISSING
+  #	PKG-OK                       <- present on screen, three times
+  #	[1]   Done    env ASSUME_ALWAYS_YES=yes pkg install -y sudo xorg ...
+  #	# pkg info sudo ... && echo PKG-OK || echo PKG-MISSING
+  #	PKG-OK
+  #
+  # The walk kept reading `PKG-MISSING` because by then the answer was one line among a screenful of
+  # typed commands, and tesseract was reading the COMMANDS instead - the log says
+  #
+  #	none of "PKG-OK" in "ri) Dene env ASSUME ALWAYS YWES=yes pkg install -y sudo ..."
+  #
+  # So the terminal is cleared first: `clear` puts the answer alone at the top, and the rect below is
+  # the top third where it lands. A full-screen rect cannot distinguish a line that scrolled out from
+  # a line that was never printed.
   repeat
     do
       item "ask pkg whether the four packages are registered"
-        input text "pkg info sudo >/dev/null 2>&1 && pkg info xfce >/dev/null 2>&1 && pkg info xfce4-session >/dev/null 2>&1 && pkg info lightdm >/dev/null 2>&1 && echo PKG-OK || echo PKG-MISSING"
+        input text "clear; pkg info sudo >/dev/null 2>&1 && pkg info xfce >/dev/null 2>&1 && pkg info xfce4-session >/dev/null 2>&1 && pkg info lightdm >/dev/null 2>&1 && echo PKG-OK || echo PKG-MISSING"
       item
         input ret
         settle 15
@@ -451,7 +470,7 @@ step "the four packages are registered, which is the only proof of a finished in
       bind packages_ready
       source pkgstate
       mode text
-      rect [0, 0, 1920, 1080]
+      rect [0, 0, 1920, 360]
       rect_at [1920, 1080]
       words [[PKG-OK]]
     max 120
@@ -468,7 +487,7 @@ step "prove the desktop actually landed"
   repeat
     do
       item "ask whether the desktop's files are on disk"
-        input text "ls /usr/local/share/xsessions/xfce.desktop /usr/local/bin/Xorg /usr/local/sbin/lightdm /usr/local/bin/sudo >/dev/null 2>&1 && echo DESKTOP-OK || echo DESKTOP-MISSING"
+        input text "clear; ls /usr/local/share/xsessions/xfce.desktop /usr/local/bin/Xorg /usr/local/sbin/lightdm /usr/local/bin/sudo >/dev/null 2>&1 && echo DESKTOP-OK || echo DESKTOP-MISSING"
       item
         input ret
         settle 8
@@ -479,7 +498,7 @@ step "prove the desktop actually landed"
       bind desktop_landed
       source desktop
       mode text
-      rect [0, 0, 1920, 1080]
+      rect [0, 0, 1920, 360]
       rect_at [1920, 1080]
       words [[DESKTOP-OK]]
     max 30
