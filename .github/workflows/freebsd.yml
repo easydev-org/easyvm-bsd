@@ -82,7 +82,7 @@ jobs:
             "name": "bsd-freebsd-install",
             "file": "freebsd/steps/install.walk",
             "pull": "",
-            "assets": ["iso-freebsd:freebsd.iso"],
+            "assets": ["iso-freebsd:freebsd.iso.tar"],
             "out": "bsd-freebsd-install.qcow2",
             "publish": "bsd-freebsd-install",
             "timeout": 180
