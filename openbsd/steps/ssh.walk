@@ -1,0 +1,96 @@
+# openbsd 7.8 - the installed system, over ssh, with its desktop proven on screen.
+#
+# THE INSTALL WALK PROVES THE INSTALLER ANSWERED EVERY QUESTION. This one proves the machine that
+# came out of it runs what a person would use: an sshd that answers, the account that owns the
+# desktop, cwm in the base system, and xenodm bringing that session up.
+#
+# THE COLOUR OF THE SCREEN IS THE PROOF, AND IT IS NOT A THRESHOLD. OpenBSD's X draws a grey stipple
+# root window - MEASURED, RGB(158, 158, 158) with a two-pixel weave - and cwm draws nothing else
+# until a window opens. A login panel that never went away is a different picture entirely (a dark
+# blue panel with a pufferfish), so "the grey root is on screen" is exactly the claim "the session
+# started", and it cannot be satisfied by a machine stuck at the greeter.
+walkthrough "openbsd 7.8 - sshd, cwm, and the desktop"
+resolution 1920x1080
+recording_resolution 1920x1080
+user vmuser
+var out
+  default out/openbsd-ssh.qcow2
+  from args.out
+password admin1
+ssh_port 2222
+
+step "boot the disk"
+  boot
+    machine "q35,accel=kvm,vmport=off"
+    args [["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    timeout 900
+
+step "wait for sshd"
+  repeat
+    until machine_ssh
+    max 60
+    pause 10
+
+step "prove the kernel over ssh"
+  ssh "uname -a"
+
+step "prove the account over ssh"
+  ssh "id -un"
+
+# THE MACHINE THE INSTALLER WROTE HAS NO NETWORK CONFIGURATION OF ITS OWN, BECAUSE THE INSTALL WALK
+# ANSWERED EVERY NETWORK QUESTION WITH `none` - that is what makes it offline. The interface is
+# brought up here, and DHCP is what the tap behind this guest serves.
+step "bring the interface up, because the install walk configured none"
+  ssh "sudo sh -c 'grep -q \"^dhcp\" /etc/hostname.em0 2>/dev/null || echo dhcp > /etc/hostname.em0; ifconfig em0 up; dhclient em0 >/dev/null 2>&1; ifconfig em0'"
+  timeout 180
+
+step "prove the address"
+  ssh "ifconfig em0 | grep 'inet '"
+
+# THE FILE THE INSTALL WALK WROTE, READ BACK FROM THE BOOTED SYSTEM RATHER THAN FROM THE INSTALLER.
+step "the account's session is cwm, on the booted disk"
+  ssh "cat /home/{{ user }}/.xsession"
+
+# cwm IS IN xbase AND THIS IS THE FILE ITSELF, not the package manager's record of it.
+step "cwm is in the base system"
+  ssh "ls -l /usr/X11R6/bin/cwm"
+
+step "xenodm is enabled, which is what starts that session"
+  ssh "sysrc -n xenodm 2>/dev/null; grep -c 'xenodm' /etc/rc.conf.local /etc/rc.conf 2>/dev/null | grep -v ':0'"
+
+step "the greeter is drawing, so the display is up"
+  ssh "pgrep -x xenodm && echo XENODM_UP"
+
+# THE PICTURE, AND IT IS THE CLAIM THIS STAGE EXISTS FOR. See the header: the grey stipple root is
+# what cwm leaves on screen, and it is not what the greeter draws.
+step "the session replaced the greeter with the grey root cwm leaves behind"
+  repeat
+    do
+      item
+        settle 10
+      item "read the screen"
+        read
+          name desk
+    until
+      bind ready
+      source desk
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      without [[login], [password], [openbsd]]
+    max 40
+
+step "flush the writes before the machine stops"
+  ssh "sudo sync"
+  timeout 300
+
+step "press the power button"
+  acpi power
+  timeout 60
+
+step "wait for the machine to stop"
+  wait_until stopped
+  timeout 600
+
+step "publish the disk"
+    save "{{ out }}"

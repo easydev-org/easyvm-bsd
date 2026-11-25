@@ -1,0 +1,170 @@
+# ghostbsd 26.3 - GBI, the graphical installer, to an installed disk.
+#
+# THIS IS THE ONE DISTRIBUTION HERE WHOSE INSTALLER IS A GUI, NOT A TUI. GBI (GhostBSD Installer)
+# is a GTK notebook: language, keyboard, network, "try or install", installation type, disk, boot
+# option, then an installation-progress pane. Every page has a `Next` in the same place, and the
+# pages are clicked rather than keyed.
+#
+# THE COORDINATES BELOW WERE MEASURED ON A REAL GUEST, NOT GUESSED. They are the 1920x1080 frame
+# the VGA device draws here; `click_at: [1920, 1080]` on every click lets the engine rescale them
+# if a later guest draws another size.
+#
+# GBI HAS NO UFS OPTION AND THAT IS WHY THIS DISK IS ZFS.
+#
+#	$ sed -n '95,105p' src/partition.py        # ghostbsd/gbi, master
+#	        self.fs_type = Gtk.ComboBoxText()
+#	        self.fs_type.append_text('ZFS')
+#	        self.fs_type.append_text('SWAP')
+#	        if scheme == 'GPT':
+#	            if bios_type == "UEFI":
+#	                self.fs_type.append_text("UEFI")
+#
+# The full-disk path is ZFS and only ZFS: `installType.py` defaults `self.ne = 'zfs'`, and the
+# "UFS full disk configuration" radio it once had is commented out in the source. The one UFS
+# entry point left is `Custom (Advanced partitioning)`, which is a manual partition editor and is
+# NOT what this file drives. So this disk is ZFS, and the trade is deliberate: an installer that
+# works, on the filesystem its own vendor ships, rather than a hand-built system this repository
+# would have to maintain.
+#
+# THE INSTALLED DISK WAS PROVEN BOOTABLE BEFORE THIS FILE WAS WRITTEN. A real GBI run, the disk
+# booted with NO medium attached, reached "GhostBSD Initial Setup", and the desktop came up after
+# the wizard. That is what `smoke.walk` re-checks on every published disk.
+#
+# 8 GiB OF MEMORY IS NOT NEGOTIABLE, AND 4 GiB FAILS IN A WAY THAT LOOKS LIKE A BAD ISO.
+#
+# MEASURED, `-m 4096`:
+#
+#	Required memory: 4294967296 for memdisk
+#	Detected memory: 4294967296 for memdisk
+#	==> Replicate system image to swap-based memdisk
+#	cannot receive new filesystem stream: out of space 15.001s, 200 MB/s
+#
+# The 3.84 GiB ISO is replicated into a swap-based memdisk at boot and there is not enough left
+# over for the copy. `-m 8192` boots the same medium to the live desktop.
+
+walkthrough "ghostbsd 26.3 - GBI, to an installed disk"
+resolution 1920x1080
+recording_resolution 1920x1080
+var out
+  default out/distro.qcow2
+  from args.out
+password admin1
+var shutdown
+  default kill
+  from args.shutdown
+var user
+  default vmuser
+  from args.user
+
+step "the media this stage boots from is already on disk"
+  needs [ghostbsd.iso]
+
+step "create the empty disk"
+  disk
+    file disk.qcow2
+    size 128
+
+step "boot the installer"
+  boot
+    machine "q35,accel=kvm,vmport=off"
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "8192"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=ghostbsd.iso,media=cdrom,readonly=on,if=none,id=media0"], ["-device", "ide-cd,drive=media0,bootindex=0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=1"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"]]
+    timeout 1800
+
+# THE LIVE DESKTOP IS THE FIRST THING THAT PRINTS THE PRODUCT'S NAME, so it is what this waits
+# for rather than a fixed sleep: the memdisk replication takes as long as it takes.
+step "wait for the live desktop and GBI's first page"
+  repeat
+    do
+      item
+        settle 10
+      item "read the screen"
+        read
+          name welcome
+    until
+      bind gbi_up
+      source welcome
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      words [[welcome, to, ghostbsd], [please, select, your, language], [keyboard, setup]]
+    max 90
+
+step "welcome - Next, with English already the selection"
+  input 1330 778
+  click_at [1920, 1080]
+  settle 8
+
+step "keyboard - Next, with English (US) already the selection"
+  input 1323 778
+  click_at [1920, 1080]
+  settle 8
+
+step "network - the card is already connected; Next"
+  input 1323 778
+  click_at [1920, 1080]
+  settle 8
+
+step "try or install - Install is preselected; Next"
+  input 1323 778
+  click_at [1920, 1080]
+  settle 10
+
+step "installation type - Disks Configuration is preselected; Next"
+  input 1323 778
+  click_at [1920, 1080]
+  settle 10
+
+# THE DRIVE CHECKBOX IS NOT THE ROW HIGHLIGHT. Clicking the row highlights it and leaves the box
+# empty, which is how the first attempt at this page sat on a screen with no disk selected.
+step "zfs configuration - tick the only drive"
+  input 798 380
+  click_at [1920, 1080]
+  settle 4
+
+step "zfs configuration - Next, with the default pool layout and 8192 MB swap"
+  input 1323 778
+  click_at [1920, 1080]
+  settle 10
+
+# "FreeBSD UEFI loader only" IS THE DEFAULT AND IT IS THE ONE THAT BOOTS UNDER OVMF. rEFInd and
+# the BSD boot manager are the alternatives on this page and neither is needed on a single-disk
+# UEFI guest.
+step "boot option - Install, with the UEFI loader already selected"
+  input 1323 778
+  click_at [1920, 1080]
+  settle 20
+
+# THE INSTALL IS MINUTES OF COPYING AND PACKAGE CHECKS, SO THE WAIT IS THE DIALOG'S OWN TITLE.
+step "wait for the install to finish"
+  repeat
+    do
+      item
+        settle 15
+      item "read the screen"
+        read
+          name done
+    until
+      bind finished
+      source done
+      mode text
+      rect [560, 300, 1370, 780]
+      rect_at [1920, 1080]
+      scale 2
+      words [[installation, completed], [installation, is, complete]]
+    max 240
+
+# THE MACHINE IS KILLED HERE, NOT RESTARTED, AND THE DISK WAS PROVEN BOOTABLE THAT WAY.
+#
+# MEASURED on the run that produced this file: the install-completed dialog appeared, the machine
+# was killed with no restart, and `disk.qcow2` booted ALONE - no medium attached - into "GhostBSD
+# Initial Setup", then the MATE desktop. So there is no restart step to wait for: the pool GBI wrote
+# survives the kill, and `smoke.walk` re-proves the boot on every published disk.
+#
+# IT ALSO AVOIDS A TRAP: the medium is still `bootindex=0`, so a reboot from here comes back to the
+# LIVE desktop, and a walk waiting on that would be watching the installer boot again.
+step "stop the machine"
+  stop "{{ shutdown }}"
+  timeout 300
+
+step "publish the disk"
+    save "{{ out }}"

@@ -1,0 +1,431 @@
+# openbsd 7.8 - the installer, answered on the console.
+#
+# EVERY QUESTION BELOW WAS MEASURED ON A REAL GUEST. The order is the installer's own, and it is not
+# the order the documentation suggests - four of these prompts exist and are easy to miss, and each
+# one that is missed shifts every answer after it by one line, which is how a run of this walk
+# answered all 34 steps and published an empty disk.
+#
+# THE TRANSCRIPT (from the console log of the run that produced this file):
+#
+#	(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?          -> i
+#	Choose your keyboard layout ('?' or 'L' for list) [default]
+#	System hostname? (short form, e.g. 'foo')                -> openbsd
+#	Network interface to configure? (name, lladdr, '?', or 'done') [em0]  -> em0
+#	IPv4 address for em0? (or 'autoconf' or 'none') [autoconf]           -> none
+#	IPv6 address for em0? (or 'autoconf' or 'none') [none]               -> none
+#	Network interface to configure? ... [done]                            -> done
+#	DNS domain name? (e.g. 'example.com') [my.domain]
+#	DNS nameservers? (IP address list or 'none') [none]                   -> none
+#	Password for root account? (will not echo)
+#	Password for root account? (again)
+#	Start sshd(8) by default? [yes]
+#	Do you want the X Window System to be started by xenodm(1)? [no]      -> yes
+#	Change the default console to com0? [no]
+#	Setup a user? (enter a lower-case loginname, or 'no') [no]            -> vmuser
+#	Full name for user vmuser? [vmuser]                                   <-- EASY TO MISS
+#	Password for user vmuser? (will not echo)
+#	Password for user vmuser? (again)
+#	Allow root ssh login? (yes, no, prohibit-password) [no]
+#	Encrypt the root disk with a (p)assphrase or (k)eydisk? [no]          <-- EASY TO MISS
+#	Which disk is the root disk? ('?' for details) [sd0]
+#	Use (W)hole disk MBR, whole disk (G)PT or (E)dit? [gpt]
+#	Use (A)uto layout, (E)dit auto layout, or create (C)ustom layout? [a]
+#	Location of sets? (cd0 disk http nfs or 'done') [http]                -> cd0
+#	Pathname to the sets? (or 'done') [7.8/amd64]                         <-- EASY TO MISS
+#	Set name(s)? (or 'abort' or 'done') [done]                            -> done
+#	Directory does not contain SHA256.sig. Continue without verification? [no] -> yes   <-- EASY TO MISS
+#	Location of sets? (cd0 disk http nfs or 'done') [done]                -> done
+#	What timezone are you in? ('?' for list) [Canada/Mountain]            -> UTC
+#	Exit to (S)hell, (H)alt or (R)eboot? [reboot]                         -> s
+#
+# THE DEFAULTS ARE PART OF THE DESIGN, AND TWO OF THEM ARE WRONG FOR THIS JOB:
+#
+#	`Location of sets` DEFAULTS TO `http`, not to the disc. An empty line here starts a NETWORK
+#	install against cdn.openbsd.org - the opposite of what this walk's name says.
+#
+#	`xenodm` DEFAULTS TO `no`. With it off there is no graphical login at all, and the published disk
+#	only knows a text console.
+#
+# AND TWO PROMPTS HAVE NO DEFAULT THAT CAN BE ACCEPTED BLINDLY:
+#
+#	`Full name for user` is the fifth account question, and it is why a walk that answers "user, then
+#	password, then password" sets the user's FULL NAME to the password and then fails to match the
+#	two password fields.
+#
+#	`Continue without verification?` appears because install78.iso's own /7.8/amd64 carries no
+#	SHA256.sig. The disc is the pinned ISO this repository verified by sha256 before publishing it as
+#	an asset, so `yes` here is consenting to the pin that already happened, not skipping a check.
+#
+# THE SETS COME FROM THE DISC AND NOWHERE ELSE. `install78.iso` carries BASE78, COMP78, MAN78,
+# GAME78, XBASE78, XFONT78, XSERV78 and XSHARE78 at /7.8/AMD64 - MEASURED by reading the ISO's
+# directory - so `cd0` installs a complete system with NO NETWORK AT ALL.
+#
+# `printf` IS NOT IN THE RAMDISK'S SHELL - MEASURED, `sh: printf: not found` - so the session file
+# is written with `echo`, which is.
+#
+# THE ACCOUNT'S ~/.xsession IS WRITTEN AFTER THE INSTALL, because OpenBSD SHIPS NO DEFAULT ONE: its
+# `/etc/X11/xenodm/Xsession` runs the user's file when it exists and falls back to a bare xterm when
+# it does not, and a bare xterm is not a desktop. The ending of this walk therefore takes the
+# installer's `(S)hell` exit, writes `exec cwm` into the new account's home on the disk the installer
+# left mounted at /mnt, and halts. `cwm` is in xbase78 - MEASURED, /usr/X11R6/bin/cwm - and it is the
+# window manager OpenBSD's own FAQ 11 example runs.
+
+walkthrough "openbsd 7.8 - the installer, to an installed disk"
+resolution 1920x1080
+recording_resolution 1920x1080
+var out
+  default out/distro.qcow2
+  from args.out
+password admin1
+var shutdown
+  default kill
+  from args.shutdown
+var user
+  default vmuser
+  from args.user
+
+step "the media this stage boots from is already on disk"
+  needs [openbsd.iso]
+
+step "create the empty disk"
+  disk
+    file disk.qcow2
+    size 128
+
+step "boot the installer"
+  boot
+    machine "q35,accel=kvm,vmport=off"
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=openbsd.iso,media=cdrom,readonly=on,if=none,id=media0"], ["-device", "ide-cd,drive=media0,bootindex=0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=1"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    timeout 1200
+
+# THE GATE IS THE SENTENCE, NOT THE MENU. MEASURED: tesseract reads the hot-key menu as
+#
+#	tesseract: CI)nstall, CWpgrade, CA)utoinstall or (Shell? §j
+#
+# so `words [[install], [upgrade], [autoinstall]]` was a gate that could never close. The line above
+# it reads cleanly at scale 2.
+step "wait for the installer's first prompt"
+  repeat
+    do
+      item
+        settle 10
+      item "read the screen"
+        read
+          name first
+    until
+      bind ready
+      source first
+      mode text
+      rect [0, 900, 1920, 1080]
+      rect_at [1920, 1080]
+      scale 2
+      words [[welcome, to, the, openbsd], [installation, program]]
+    max 60
+
+step "install"
+  do
+    item
+      input text "i"
+    item
+      input ret
+      settle 8
+
+step "keyboard layout - the default is the US map"
+  input ret
+  settle 6
+
+step "hostname"
+  do
+    item
+      input text "openbsd"
+    item
+      input ret
+      settle 5
+
+# EVERY NETWORK ANSWER IS `none`, AND THAT IS WHAT MAKES THIS WALK OFFLINE AND DETERMINISTIC.
+#
+# `autoconf` STARTS A DHCP EXCHANGE THAT TAKES TENS OF SECONDS, and the installer accepts no input
+# while it runs. ANSWERING `autoconf` HERE IS WHAT BROKE THE FIRST VERSION OF THIS FILE: the answers
+# typed during the wait were swallowed, the prompt converged on `done`, and every later answer landed
+# one question early - the run answered all 34 steps and installed nothing.
+#
+# The sets come from the DISC, so the installer needs no address; and a machine that does want a
+# network brings its interface up itself after boot.
+step "network - the interface, named by the driver"
+  do
+    item
+      input text "em0"
+    item
+      input ret
+      settle 4
+
+step "network - no ipv4 address, because the sets are on the disc"
+  do
+    item
+      input text "none"
+    item
+      input ret
+      settle 4
+
+step "network - no ipv6 address"
+  do
+    item
+      input text "none"
+    item
+      input ret
+      settle 4
+
+step "network - no second interface"
+  do
+    item
+      input text "done"
+    item
+      input ret
+      settle 4
+
+# THE DNS DOMAIN MUST NOT BE THE PLACEHOLDER. MEASURED: an empty line leaves `my.domain`, and the
+# installed host becomes `openbsd.my.domain` - visible on the xenodm panel and in every prompt. The
+# literal `none` is what /etc/myname keeps as a bare hostname.
+step "dns domain - none, so the hostname stays bare"
+  do
+    item
+      input text "none"
+    item
+      input ret
+      settle 3
+
+step "dns servers - none, there is no network to resolve on"
+  do
+    item
+      input text "none"
+    item
+      input ret
+      settle 4
+
+step "root password"
+  do
+    item
+      input text "{{ password }}"
+    item
+      input ret
+      settle 3
+    item
+      input text "{{ password }}"
+    item
+      input ret
+      settle 5
+
+step "sshd at boot - the default is yes"
+  input ret
+  settle 4
+
+# THE ONE ANSWER THAT MUST NOT BE THE DEFAULT. See the header: without xenodm there is no graphical
+# login, and the published disk would only ever show a text console.
+step "xenodm - yes, which is the graphical login"
+  do
+    item
+      input text "yes"
+    item
+      input ret
+      settle 4
+
+step "serial console - the default is no"
+  input ret
+  settle 4
+
+step "the account"
+  do
+    item
+      input text "{{ user }}"
+    item
+      input ret
+      settle 4
+
+# THE FIFTH ACCOUNT QUESTION, AND THE ONE THAT SHIFTED EVERY ANSWER AFTER IT. Its default is the
+# login name, which is what a walk wants, so it is accepted with an empty line - but it has to be
+# ANSWERED, or the password lands in the full name and the two password fields never match.
+step "the account's full name - accept the login name"
+  input ret
+  settle 4
+
+step "the account's password"
+  do
+    item
+      input text "{{ password }}"
+    item
+      input ret
+      settle 3
+    item
+      input text "{{ password }}"
+    item
+      input ret
+      settle 5
+
+step "root over ssh - the default is no, and the account is what ssh uses"
+  input ret
+  settle 4
+
+# AND THE ONE PROMPT WITH NO DEFAULTS AT ALL: `Encrypt the root disk with a (p)assphrase or
+# (k)eydisk? [no]`. An empty line takes `no`.
+step "no root-disk encryption"
+  input ret
+  settle 4
+
+step "the root disk - the only one attached"
+  input ret
+  settle 6
+
+step "the partition scheme - GPT, which is what makes this disk UEFI bootable"
+  input ret
+  settle 6
+
+step "the automatic layout"
+  input ret
+  settle 10
+
+# `cd0` IS THE DISC, AND IT MUST BE TYPED: THE DEFAULT IS `http`, which is a network install.
+step "sets from the disc"
+  do
+    item
+      input text "cd0"
+    item
+      input ret
+      settle 6
+
+step "the path on the disc - the default is where the sets are"
+  input ret
+  settle 6
+
+step "every set the disc carries - the list is already ticked"
+  do
+    item
+      input text "done"
+    item
+      input ret
+      settle 8
+
+# NO SHA256.sig ON THIS DISC, AND THE PIN ALREADY HAPPENED. `artifacts-publish.yml` verified the ISO
+# by sha256 before it became this stage's asset, so this is consent, not a skipped check.
+step "continue without the disc's own signature file"
+  do
+    item
+      input text "yes"
+    item
+      input ret
+      settle 10
+
+step "wait for the sets to be installed"
+  repeat
+    do
+      item
+        settle 20
+      item "read the screen"
+        read
+          name sets
+    until
+      bind installed
+      source sets
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      scale 2
+      words [[location, of, sets], [done]]
+    max 180
+
+step "no more sets"
+  do
+    item
+      input ret
+      settle 8
+
+step "time zone - UTC"
+  do
+    item
+      input text "UTC"
+    item
+      input ret
+      settle 5
+
+# THE SHELL EXIT IS TAKEN SO THE ACCOUNT'S ~/.xsession CAN BE WRITTEN BEFORE THE MACHINE STOPS. The
+# installer leaves the new root mounted at /mnt when it drops to the shell.
+step "exit to the shell rather than reboot"
+  do
+    item
+      input text "s"
+    item
+      input ret
+      settle 12
+
+# THE DISK IS STILL MOUNTED AT /mnt WHEN THE SHELL OPENS, AND THAT WAS CHECKED RATHER THAN ASSUMED.
+#
+# MEASURED in the ramdisk shell of a completed install:
+#
+#	openbsd# mount | grep sd0
+#	/dev/sd0a on /mnt type ffs (asynchronous, local)
+#	/dev/sd0d on /mnt/tmp type ffs ...
+#
+# so the account's home is at /mnt/home/<user> and needs no mount of its own.
+step "prove the new system is mounted where the installer left it"
+  do
+    item
+      input text "ls /mnt/etc/hostname && echo ROOT_OK"
+    item
+      input ret
+      settle 8
+
+# `exec cwm` IS THE WHOLE FILE: Xsession runs this instead of a bare xterm, and cwm is the window
+# manager OpenBSD's FAQ 11 example starts.
+step "give the account a session that starts cwm"
+  do
+    item
+      input text "echo exec cwm > /mnt/home/{{ user }}/.xsession"
+    item
+      input ret
+      settle 6
+
+# `printf` IS NOT IN THE RAMDISK'S SHELL. MEASURED on the run that produced this file:
+#
+#	sh: printf: not found
+#
+# `echo` is, and one line is all Xsession needs.
+# MEASURED: the file came out `-rw-r--r-- root vmuser`, so the chown landed but the mode did not -
+# and Xsession runs the user's file with `sh`, so the mode is not what breaks it. It is set anyway,
+# and the step proves the pair rather than assuming one implies the other.
+step "the file belongs to the account and is executable"
+  do
+    item
+      input text "chown {{ user }}:{{ user }} /mnt/home/{{ user }}/.xsession; chmod 755 /mnt/home/{{ user }}/.xsession; ls -l /mnt/home/{{ user }}/.xsession && echo XSESSION_OK"
+    item
+      input ret
+      settle 6
+
+step "prove the session file"
+  do
+    item
+      input text "cat /mnt/home/{{ user }}/.xsession"
+    item
+      input ret
+      settle 6
+
+step "the root account gets one too"
+  do
+    item
+      input text "echo exec cwm > /mnt/root/.xsession && chmod 755 /mnt/root/.xsession && echo ROOT_XSESSION_OK"
+    item
+      input ret
+      settle 6
+
+step "flush the writes before the machine stops"
+  do
+    item
+      input text "sync"
+    item
+      input ret
+      settle 12
+
+step "stop the machine"
+  stop "{{ shutdown }}"
+  timeout 300
+
+step "publish the disk"
+    save "{{ out }}"

@@ -1,0 +1,298 @@
+# netbsd 11.1 - sysinst, answered blind, to an installed disk.
+#
+# THIS FILE DOES NOT READ THE SCREEN, AND THAT IS THE MEASURED DECISION. NetBSD's installer draws on
+# a 720x400 VGA TEXT mode with a small low-contrast font, and tesseract cannot read it reliably:
+#
+#	MEASURED, probing the menu region of a live installer:
+#	none of "zzzznotpresent" in "j- oie alll i estes Meal AA eee Lelalaentaitor AA ..."
+#
+# That is an OCR failure, not a screen that is not there - the same frame's console log says the menu
+# was drawn. The other three BSD installers here draw at 640x480 or larger and are read; this one is
+# not, so its steps carry `settle:` instead of a gate.
+#
+# THE SEQUENCE IS STILL MEASURED, KEY BY KEY, IN A REAL GUEST. Every `input` and `settle` below comes
+# from a transcript of a run that reached "The extraction of the selected sets ... is complete":
+#
+#	NetBSD/amd64 11.1 ... installation messages menu       -> RET (English is first, selected)
+#	Keyboard type                                          -> b, RET (US-English)
+#	NetBSD-11.1 Install System                             -> RET (a: Install NetBSD to hard disk)
+#	Shall we continue?  a: No   b: Yes                     -> b, RET  <-- DEFAULT IS NO
+#	On which disk  a: ld0 (20G, Virtio Block Device)       -> RET
+#	partitioning scheme  a: GPT                            -> RET
+#	geometry  a: correct geometry                          -> RET
+#	sizes  b: Use default partition sizes                  -> b, RET
+#	partitions summary  x: Partition sizes ok              -> x, RET
+#	Shall we continue?                                     -> b, RET  <-- DEFAULT IS NO AGAIN
+#	bootblocks  a: Use BIOS console                        -> RET
+#	distribution sets  a: Full installation                -> RET
+#	Install from  a: CD-ROM                                -> RET
+#	set note                                               -> RET
+#	(the sets extract)
+#	Hit enter to continue                                  -> RET
+#	New password / Retype new password                     -> the password twice
+#	Configure the additional items as needed               -> g (sshd), k (xdm), then x (finished)
+#
+# TWO ANSWERS ARE `No` BY DEFAULT AND BOTH ARE WHAT THE LATER STAGES NEED:
+#
+#	`Shall we continue?` defaults to No. MEASURED twice: pressing return there returns to the main
+#	menu with nothing written, which is a walk that publishes its own empty disk.
+#
+#	`Enable sshd` and `Enable xdm` both default to NO.
+#
+# THE NETWORK IS NOT CONFIGURED HERE. `Configure network` TERMINATES sysinst at its netmask prompt on
+# this medium - MEASURED:
+#
+#	IPv4 Netmask [0xffff0000]:
+#	sysinst terminated.
+#	To return to the installer, quit this shell by typing 'exit' or ^D.
+#
+# That happens AFTER the sets are extracted, so the disk is complete when it does. `ssh.walk` brings
+# the interface up on the booted system and installs Xfce from pkgin.
+#
+# THE X SETS ARE INSTALLED HERE, AND THE WINDOW MANAGER IS NOT. `xdm` only starts a session; the
+# Xfce packages and its ~/.xsession are what `ssh.walk` adds, because a package install is a network
+# operation and this stage has none.
+walkthrough "netbsd 11.1 - sysinst, to an installed disk"
+resolution 1920x1080
+recording_resolution 1920x1080
+var out
+  default out/distro.qcow2
+  from args.out
+password admin1
+var shutdown
+  default kill
+  from args.shutdown
+var user
+  default vmuser
+  from args.user
+
+step "the media this stage boots from is already on disk"
+  needs [netbsd.iso]
+
+step "create the empty disk"
+  disk
+    file disk.qcow2
+    size 128
+
+# NO OVMF HERE, AND THAT IS DELIBERATE. sysinst writes GPT and BIOS bootblocks; the medium boots
+# through its own El Torito image and the disk through the bootblocks it wrote.
+step "boot the installer"
+  boot
+    machine "q35,accel=kvm,vmport=off"
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "2048"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=netbsd.iso,media=cdrom,readonly=on,if=none,id=media0"], ["-device", "ide-cd,drive=media0,bootindex=0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=1"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    timeout 1200
+
+# THE MEDIUM TAKES ABOUT A MINUTE TO REACH ITS LANGUAGE MENU - MEASURED, and this settle is what the
+# unreadable screen cannot be asked about.
+step "wait for the installer to draw"
+  settle 80
+
+step "english, which is the first entry"
+  input ret
+  settle 10
+
+step "us keyboard"
+  do
+    item
+      input text "b"
+    item
+      input ret
+      settle 10
+
+step "install netbsd to hard disk, which is the first entry"
+  input ret
+  settle 14
+
+# THE DEFAULT HERE IS `No`.
+step "continue - yes"
+  do
+    item
+      input text "b"
+    item
+      input ret
+      settle 16
+
+step "the only disk"
+  input ret
+  settle 16
+
+# MBR AND NOT GPT, BECAUSE THE GPT PATH LEFT A DISK THAT WOULD NOT BOOT. MEASURED on the disk this
+# walk published with GPT selected: the MBR signature `55 aa` was present at offset 510 and the boot
+# code at 440 was SIXTEEN ZERO BYTES, so the firmware loaded nothing and the machine fell through to
+# the CD-ROM. MBR is NetBSD's own BIOS default and its boot code is written by `installboot` into the
+# first sector, which is the path this medium is made for.
+step "the mbr scheme"
+  do
+    item
+      input text "b"
+    item
+      input ret
+      settle 16
+
+step "the geometry the bios reported"
+  input ret
+  settle 16
+
+# MBR ASKS ONE MORE QUESTION THAN GPT, AND ITS DEFAULT IS THE WRONG ANSWER.
+#
+# MEASURED: the page is
+#
+#	What would you like to do?
+#	  a: Edit the MBR partition table      <-- the default, and it opens an editor
+#	  b: Use the entire disk
+#	  c: Delete everything, use different partitions (not MBR)
+#	  x: Cancel
+#
+# `a` is what a blind RETURN picks, and it leads into an editor this walk does not drive. `b` covers
+# the disk with one MBR partition, which is what a single-OS guest wants.
+step "use the entire disk"
+  do
+    item
+      input text "b"
+    item
+      input ret
+      settle 18
+
+step "the default partition sizes"
+  do
+    item
+      input text "b"
+    item
+      input ret
+      settle 18
+
+step "accept the partition table"
+  do
+    item
+      input text "x"
+    item
+      input ret
+      settle 20
+
+# `No` AGAIN BY DEFAULT.
+step "continue - yes, the last chance to quit"
+  do
+    item
+      input text "b"
+    item
+      input ret
+      settle 22
+
+# `x: CONTINUE` AND NOT A RETURN: THIS PAGE IS A SELECTION AND ITS FIRST ENTRY IS NOT A SUBMIT.
+#
+# MEASURED on the disk an earlier version of this walk published (GPT path): the MBR signature
+# `55 aa` was at offset 510 and the boot code at 440 was SIXTEEN ZERO BYTES - `installboot` never ran,
+# the firmware loaded nothing, and the machine fell through to the CD-ROM with
+#
+#	Boot failed: Could not read from CDROM (code 0003)
+#
+# This page is why. `a: Use BIOS console` is already selected; RETURN re-selects it and stays here.
+# `x: Continue` is the entry that commits the choice and runs installboot.
+step "install the bios console bootblocks"
+  do
+    item
+      input text "x"
+    item
+      input ret
+      settle 25
+
+step "the full distribution"
+  input ret
+  settle 18
+
+step "install from the cd-rom"
+  input ret
+  settle 22
+
+step "the note about the optional sets this medium does not carry"
+  input ret
+  settle 30
+
+# THE EXTRACTION IS THE LONG WAIT AND IT IS THE ONE THING A FIXED DELAY CANNOT COVER. MEASURED on this
+# medium: about four minutes to unpack the 19 selected sets. `settle 400` is the ceiling; the next
+# keypress is harmless if it arrives after the page appears, because the page after it is the password
+# prompt and a stray return there simply re-asks.
+step "wait for the sets to be extracted"
+  settle 400
+
+step "the extraction is complete"
+  input ret
+  settle 14
+
+step "the root password - first entry"
+  do
+    item
+      input text "{{ password }}"
+    item
+      settle 5
+    item
+      input ret
+      settle 5
+
+step "the root password - the repeat"
+  do
+    item
+      input text "{{ password }}"
+    item
+      settle 5
+    item
+      input ret
+      settle 14
+
+# THE CONFIGURATION MENU. `g` enables sshd and `k` enables xdm; both default to NO and both are what
+# the later stages need. Each returns to the same menu, so the two keys are sent separately with the
+# redraw between them.
+step "enable sshd"
+  do
+    item
+      input text "g"
+    item
+      input ret
+      settle 14
+
+step "enable xdm, the graphical login"
+  do
+    item
+      input text "k"
+    item
+      input ret
+      settle 14
+
+# AND THE TIMEZONE, WHICH IS `b` ON THAT MENU. Its own menu's first entry is UTC.
+step "the timezone menu"
+  do
+    item
+      input text "b"
+    item
+      input ret
+      settle 14
+
+step "utc, the first entry"
+  input ret
+  settle 16
+
+# `Configure network` IS NOT TOUCHED: MEASURED, it terminates sysinst at its netmask prompt. See the
+# header. Everything the disk needs is already written at this point.
+step "finish configuring"
+  do
+    item
+      input text "x"
+    item
+      input ret
+      settle 20
+
+# THE INSTALLER'S LAST ACT IS TO ASK WHETHER TO REBOOT OR DROP TO A SHELL. The disk is complete and
+# the machine is about to be killed anyway, so the answer is the halt - `d` on the final menu - and a
+# plain return is harmless if the menu is not the one expected.
+step "the installer's ending"
+  do
+    item
+      input ret
+      settle 20
+
+step "stop the machine"
+  stop "{{ shutdown }}"
+  timeout 300
+
+step "publish the disk"
+    save "{{ out }}"

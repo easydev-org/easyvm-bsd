@@ -1,0 +1,55 @@
+name: ghostbsd
+
+# ghostbsd, AS ONE STAGE: GBI's graphical installer, to a published disk.
+#
+# THE INSTALLER IS A GUI, so this is the one BSD here whose walk CLICKS. Every page has a `Next`
+# at the same point and the disk page is a checkbox rather than a menu item; the coordinates in
+# `ghostbsd/steps/install.walk` were measured on a real guest and are declared with `click_at:`
+# so a different frame size is rescaled rather than refused.
+#
+# THE DISK IS ZFS AND THAT IS GBI'S DECISION, NOT THIS REPOSITORY'S. `ghostbsd/gbi`'s
+# `installType.py` defaults to `'zfs'` and the UFS full-disk radio is commented out; `partition.py`
+# appends only `ZFS`, `SWAP` and `UEFI` to the filesystem combo. The one UFS path left is a manual
+# partition editor, which is not what an unattended walk should be driving.
+#
+# MEMORY IS 8 GiB. MEASURED, 4 GiB fails while replicating the 3.84 GiB ISO into a swap-based
+# memdisk: "cannot receive new filesystem stream: out of space".
+
+on:
+  workflow_dispatch:
+    inputs:
+      disks_repository:
+        description: "the ghcr repository that holds the disks"
+        default: "easydev-org/easyvm-bsd"
+
+concurrency:
+  group: ghostbsd-install
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  checks: write
+
+jobs:
+  install:
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.4
+    secrets: inherit
+    with:
+      image_repository: easydev-org/easyvm
+      image_tag: v0.0.4
+      disk_gb: "10"
+      group: ghostbsd-install
+      disks_repository: ${{ inputs.disks_repository }}
+      stages: |
+        [
+          {
+            "name": "bsd-ghostbsd-install",
+            "file": "ghostbsd/steps/install.walk",
+            "pull": "",
+            "assets": ["iso-ghostbsd:ghostbsd.iso.tar"],
+            "out": "bsd-ghostbsd-install.qcow2",
+            "publish": "bsd-ghostbsd-install",
+            "timeout": 180
+          }
+        ]

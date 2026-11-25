@@ -1,0 +1,67 @@
+# DOES THE PUBLISHED DISK START? Boot it, look, and kill it - nothing else.
+#
+# "THE INSTALL LEG PASSED" IS NOT THE SAME CLAIM, and OpenBSD is why this file exists as its own leg.
+# The install walk ends with the installer's own "CONGRATULATIONS!" line, which says the sets were
+# unpacked; it does not say the firmware can start the disk or that xenodm comes up. Both were
+# MEASURED in a real guest before this file was written - the disk boots alone into the xenodm login
+# panel - and this leg re-checks that on every published disk.
+#
+# IT PUBLISHES NO DISK: `out:` is empty in the stage that runs this. The artifact is the recording.
+#
+# THE SCREEN IS DECLARED AT 3840x2160 BECAUSE THAT IS WHAT THIS GUEST DRAWS. MEASURED: OpenBSD's
+# efifb takes the mode the VGA device offers and the drawings land on a 3840x2160 framebuffer, so
+# `rect:` values declared at 1920x1080 crop the top-left quarter of the frame. Every rectangle below
+# is in the frame's own pixels.
+walkthrough "the published disk starts - nothing else"
+resolution 1920x1080
+recording_resolution 1920x1080
+
+step "boot the published disk"
+  boot
+    machine "q35,accel=kvm,vmport=off"
+    args [["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    timeout 600
+
+# `BdsDxe: starting` IS THE FIRMWARE SAYING IT FOUND SOMETHING BOOTABLE, and a disk it cannot start
+# prints the opposite sentence on the same console.
+step "the firmware handed control to the disk"
+  until "BdsDxe: starting"
+  from console
+  timeout 300
+
+# AND THEN THE PRODUCT'S OWN LOGIN PANEL, WHICH IS THE HALF THE FIRMWARE CANNOT CLAIM. The xenodm
+# greeter draws the host's name and the word OpenBSD on a grey panel; a disk whose kernel panicked
+# after the loader ran would pass the console check above and never draw this.
+step "a screen openbsd draws, which is what says the disk is usable and not just bootable"
+  repeat
+    do
+      item
+        settle 15
+      item "read the screen"
+        read
+          name screen
+    until
+      bind alive
+      source screen
+      mode text
+      # MEASURED with tesseract on this exact frame: the panel reads back as
+      #
+      #	openbsd.none
+      #	togin: Fe
+      #	Password: |
+      #
+      # - `Login:` comes out as `togin:` and the word `openbsd` is read from the host label above it.
+      # A gate naming `login` is therefore a gate that never closes. `password` and `openbsd` are the
+      # two words the model does read, and both are on the panel and nowhere in the installer.
+      rect [0, 400, 3840, 1200]
+      rect_at [3840, 2160]
+      scale 2
+      words [[password], [openbsd]]
+    max 60
+
+step "record three minutes of the boot"
+  settle 180
+
+step "stop the machine"
+  stop kill
+  timeout 120

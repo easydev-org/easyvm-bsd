@@ -1,0 +1,57 @@
+name: openbsd
+
+# openbsd, AS ONE STAGE: the installer, answered on the console, to a published disk.
+#
+# EVERY QUESTION THIS WALK ANSWERS WAS MEASURED ON A REAL GUEST, and four of them are prompts that
+# a walk written from the documentation misses. Each one that is missed shifts every later answer by
+# one line: the first version of this file answered all 34 of its steps and published an EMPTY DISK,
+# because the password went into the account's "Full name" field and every question after it was
+# answered one prompt early. The transcript is in `openbsd/steps/install.walk`'s header.
+#
+# THE SETS COME FROM THE DISC. `install78.iso` carries base, comp, man, game, xbase, xfont, xserv
+# and xshare under /7.8/AMD64 - MEASURED by reading the ISO's directory - so the install needs no
+# network at all. `Location of sets` DEFAULTS TO `http`, so this is a value that must be typed.
+#
+# THE DESKTOP IS cwm, WHICH IS IN xbase. OpenBSD's FAQ 11 lists cwm, fvwm and twm as the shipped
+# window managers and its own `~/.xinitrc` example runs cwm; `xbase78.tgz` carries
+# /usr/X11R6/bin/cwm (MEASURED, 110600 bytes). OpenBSD ships no default ~/.xsession, so the install
+# walk writes `exec cwm` into the account's home - without it, xenodm starts a bare xterm.
+
+on:
+  workflow_dispatch:
+    inputs:
+      disks_repository:
+        description: "the ghcr repository that holds the disks"
+        default: "easydev-org/easyvm-bsd"
+
+concurrency:
+  group: openbsd-install
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  checks: write
+
+jobs:
+  install:
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.4
+    secrets: inherit
+    with:
+      image_repository: easydev-org/easyvm
+      image_tag: v0.0.4
+      disk_gb: "10"
+      group: openbsd-install
+      disks_repository: ${{ inputs.disks_repository }}
+      stages: |
+        [
+          {
+            "name": "bsd-openbsd-install",
+            "file": "openbsd/steps/install.walk",
+            "pull": "",
+            "assets": ["iso-openbsd:openbsd.iso.tar"],
+            "out": "bsd-openbsd-install.qcow2",
+            "publish": "bsd-openbsd-install",
+            "timeout": 120
+          }
+        ]
