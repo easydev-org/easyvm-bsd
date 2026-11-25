@@ -43,8 +43,17 @@ step "the firmware handed control to the disk"
 #
 # So the question is the shape of the frame, which holds at every size and in every language:
 #
-#	mean_between  [1, 255]   - not a black screen, so the firmware did not stop at a blank display
-#	spread_between [1, 128]  - not one flat colour, so something is drawn
+#	mean_between  [0.02, 1]    - not a black screen, so the firmware did not stop at a blank display
+#	spread_between [0.01, 0.5] - not one flat colour, so something is drawn
+#
+# THE RANGES ARE FRACTIONS, NOT 0-255. MEASURED on run 45670880360, which failed with
+#
+#	not_black must be true and is false: mean brightness 0.1557, wanted 1.0000..255.0000
+#
+# `mean_between` answers a mean brightness scaled to 0..1 and `spread_between` a mean absolute
+# deviation in the same units, so a range written as if they were 8-bit numbers asks for a brightness
+# 64 times the maximum and can never be satisfied. The lower bounds here are what tells a drawn
+# screen from a black one; the upper bounds are the top of each scale.
 #
 # xenodm's panel is a dark blue field with a yellow pufferfish and white labels; a kernel that panicked
 # leaves a console's worth of high-contrast text; a disk the firmware could not start is black. The
@@ -60,7 +69,7 @@ step "there is something drawn on it"
     source boot_screen
     mode mean_between
     name not_black
-    range [1, 255]
+    range [0.02, 1]
     rect [0, 0, 1920, 1080]
     rect_at [1920, 1080]
 
@@ -70,7 +79,7 @@ step "and it is not one flat colour"
     source boot_screen
     mode spread_between
     name has_content
-    range [1, 128]
+    range [0.01, 0.5]
     rect [0, 0, 1920, 1080]
     rect_at [1920, 1080]
 
