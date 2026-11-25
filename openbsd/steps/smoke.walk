@@ -43,22 +43,33 @@ step "the firmware handed control to the disk"
 #
 # So the question is the shape of the frame, which holds at every size and in every language:
 #
-#	mean_between  [0.02, 1]    - not a black screen, so the firmware did not stop at a blank display
-#	spread_between [0.01, 0.5] - not one flat colour, so something is drawn
+#	mean_between  [8, 255]      - not a black screen
+#	spread_between [1, 128]     - not one flat colour
 #
-# THE RANGES ARE FRACTIONS, NOT 0-255. MEASURED on run 45670880360, which failed with
+# THE UNITS ARE 0-255, WHICH TWO RUNS SETTLED. Run 45670880360 said
 #
-#	not_black must be true and is false: mean brightness 0.1557, wanted 1.0000..255.0000
+#	mean brightness 0.1557, wanted 1.0000..255.0000
 #
-# `mean_between` answers a mean brightness scaled to 0..1 and `spread_between` a mean absolute
-# deviation in the same units, so a range written as if they were 8-bit numbers asks for a brightness
-# 64 times the maximum and can never be satisfied. The lower bounds here are what tells a drawn
-# screen from a black one; the upper bounds are the top of each scale.
+# and a run whose range was written as fractions said `mean brightness 1.3160, wanted
+# 0.0200..1.0000`. `screen.Mean` is documented "0..255 over the rect", so 0-255 is the scale.
+#
+# AND THE READING THAT MATTERS IS THE SECOND ONE: 1.316 IS A BLACK SCREEN. `BdsDxe: starting` arrived
+# in TWO SECONDS - the log says so - and this step captured a frame immediately after it, when the
+# kernel had printed nothing to the display yet. The wait below is what gives the kernel time to take
+# the screen over.
 #
 # xenodm's panel is a dark blue field with a yellow pufferfish and white labels; a kernel that panicked
 # leaves a console's worth of high-contrast text; a disk the firmware could not start is black. The
 # three are told apart by these two numbers alone, and neither is tuned to a threshold that only one
 # guest can satisfy - the same pair is what sd-microvm's desktop walks use for the same question.
+# THE KERNEL NEEDS TIME TO TAKE THE SCREEN, AND THIS IS THE SETTLE THAT GIVES IT TO THEM.
+#
+# MEASURED on run 45673260547: `BdsDxe: starting` in 2s, the frame captured right after it, mean
+# brightness 1.316 - a black screen, because the firmware's own text had just been cleared and the
+# kernel had not drawn yet. OpenBSD's probe takes tens of seconds before xenodm paints.
+step "let the kernel take the screen over"
+  settle 75
+
 step "the screen is not black, so the machine got a display"
   read
     name boot_screen
@@ -69,7 +80,7 @@ step "there is something drawn on it"
     source boot_screen
     mode mean_between
     name not_black
-    range [0.02, 1]
+    range [8, 255]
     rect [0, 0, 1920, 1080]
     rect_at [1920, 1080]
 
@@ -79,7 +90,7 @@ step "and it is not one flat colour"
     source boot_screen
     mode spread_between
     name has_content
-    range [0.01, 0.5]
+    range [1, 128]
     rect [0, 0, 1920, 1080]
     rect_at [1920, 1080]
 
