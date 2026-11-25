@@ -1,0 +1,440 @@
+# midnightbsd 4.0.9 - bsdinstall, to an installed disk. UFS, as asked.
+#
+# MIDNIGHTBSD'S INSTALLER IS FREEBSD'S bsdinstall, AND ITS SCREENS READ. MEASURED in a real guest:
+# every page OCRs cleanly - "MidnightBSD Installer", "Keymap Selection", "Set Hostname",
+# "Distribution Select", "Partitioning" - so this file gates on words, the way freebsd's does. That is
+# worth saying out loud because netbsd's installer, on the same pod, does not: sysinst's 720x400 VGA
+# font OCRs as noise, and `netbsd/steps/install.walk` carries `settle:` for exactly that reason.
+#
+# THE DISK IS UFS AND THE INSTALLER OFFERS IT AS A FIRST-CLASS CHOICE. The Partitioning page is
+#
+#	Auto (ZFS)   Guided Root-on-ZFS        <-- the default
+#	Auto (UFS)   Guided UFS Disk Setup
+#	Manual       Manual Disk Setup (experts)
+#	Shell        Open a shell and partition by hand
+#
+# so UFS is one DOWN from the default and then RETURN. This is the opposite of ghostbsd, whose GBI
+# never offers UFS at all and whose disk is therefore ZFS - see `ghostbsd/steps/install.walk`.
+#
+# THE COMPONENT PAGE CARRIES ITS OWN DEFAULTS AND THEY ARE KEPT: kernel-dbg, lib32 and mports arrive
+# ticked. `mports` is MidnightBSD's own package tree and is what makes the desktop installable later.
+#
+# THE DESKTOP IS XFCE AND IT IS INSTALLED ON THE BOOTED SYSTEM, NOT HERE. MidnightBSD's own
+# documentation says its desktop is Xfce ("system configuration using Xfce", and "we switched ... to
+# Xfce as our desktop environment"), and the disc does not carry the packages - `mports` does. A
+# package install is a network operation, so it belongs to `ssh.walk`.
+walkthrough "midnightbsd 4.0.9 - bsdinstall, to an installed disk"
+resolution 1920x1080
+recording_resolution 1920x1080
+var out
+  default out/distro.qcow2
+  from args.out
+password admin1
+var shutdown
+  default kill
+  from args.shutdown
+var user
+  default vmuser
+  from args.user
+
+step "the media this stage boots from is already on disk"
+  needs [midnightbsd.iso]
+
+step "create the empty disk"
+  disk
+    file disk.qcow2
+    size 128
+
+step "boot the installer"
+  boot
+    machine "q35,accel=kvm,vmport=off"
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=midnightbsd.iso,media=cdrom,readonly=on,if=none,id=media0"], ["-device", "ide-cd,drive=media0,bootindex=0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=1"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    timeout 1800
+
+step "wait for the welcome pane"
+  repeat
+    do
+      item
+        settle 10
+      item "read the screen"
+        read
+          name welcome
+    until
+      bind ready
+      source welcome
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[midnightbsd, installer], [welcome, to, midnightbsd]]
+    max 90
+
+# `<Install>` IS THE FIRST BUTTON AND IS ALREADY SELECTED.
+step "install, not the live cd"
+  input ret
+  settle 12
+
+# THE KEYMAP PAGE'S FIRST ENTRY IS `Continue with default keymap`.
+step "continue with the default keymap"
+  input ret
+  settle 10
+
+step "wait for the hostname pane"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name host
+    until
+      bind at_hostname
+      source host
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[set, hostname], [choose, a, hostname]]
+    max 40
+
+step "the hostname"
+  do
+    item
+      input text "midnightbsd"
+    item
+      input ret
+      settle 10
+
+step "wait for the component list"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name components
+    until
+      bind at_components
+      source components
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[distribution, select], [optional, system, components]]
+    max 40
+
+# kernel-dbg, lib32 AND mports ARRIVE TICKED AND ARE LEFT ALONE. `mports` is MidnightBSD's package
+# tree, and it is what `ssh.walk` installs Xfce from.
+step "keep the default components"
+  input ret
+  settle 12
+
+step "wait for the partitioning page"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name part
+    until
+      bind at_partitioning
+      source part
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[partitioning], [partition, your, disk]]
+    max 40
+
+# UFS AND NOT THE DEFAULT ZFS. See the header: one DOWN, then RETURN. MEASURED, the page's own labels
+# are `Auto (ZFS)` on the selected row and `Auto (UFS)` beneath it.
+step "auto ufs, which is one row below the default"
+  do
+    item
+      input down
+      settle 2
+    item
+      input ret
+      settle 14
+
+step "wait for the disk confirmation"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name disk
+    until
+      bind at_disk
+      source disk
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[partition], [entire, disk]]
+    max 40
+
+step "the entire disk, which is this walk's only disk"
+  input ret
+  settle 14
+
+# UFS DISK SETUP ASKS A SHORT LIST AND EVERY ANSWER IS ITS DEFAULT: the scheme, the partition
+# editor's default layout, and its confirmation. The pages after this one are what the gates below
+# wait for, so a step that lands on the wrong page fails there rather than installing the wrong disk.
+step "the partition scheme - gpt, which is the default"
+  input ret
+  settle 12
+
+step "wait for the partition editor"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name editor
+    until
+      bind at_editor
+      source editor
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[partition, editor], [create], [delete]]
+    max 40
+
+# THE EDITOR'S OWN `Finish` IS REACHED BY TABBING PAST ITS BUTTONS, the same walk freebsd's file
+# records: the buttons are Create, Delete, Auto, Revert, Finish, and Finish is the fifth.
+step "finish the partition editor"
+  do
+    item
+      input tab
+      settle 1
+    item
+      input tab
+      settle 1
+    item
+      input tab
+      settle 1
+    item
+      input tab
+      settle 1
+    item
+      input ret
+      settle 14
+
+step "commit the layout"
+  do
+    item
+      input ret
+      settle 16
+
+step "wait for the install to begin"
+  repeat
+    do
+      item
+        settle 15
+      item "read the screen"
+        read
+          name progress
+    until
+      bind installing
+      source progress
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[extracting], [installing], [packages], [root, password]]
+    max 200
+
+# THE ROOT PASSWORD PANE COMES STRAIGHT AFTER THE SETS EXTRACT, and it has two fields.
+step "wait for the root password pane"
+  repeat
+    do
+      item
+        settle 10
+      item "read the screen"
+        read
+          name rootpw
+    until
+      bind at_rootpw
+      source rootpw
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[root, password], [please, select, a, password]]
+    max 120
+
+step "the root password"
+  do
+    item
+      input text "{{ password }}"
+    item
+      input tab
+      settle 1
+    item
+      input text "{{ password }}"
+    item
+      settle 2
+    item
+      input tab
+      settle 1
+    item
+      input tab
+      settle 1
+    item
+      input ret
+      settle 10
+
+# THE REMAINING PANES ARE THE ONES bsdinstall ALWAYS ASKS, IN THIS ORDER: network, time zone, services,
+# hardening, firmware, the account hand-off, and final configuration. Each is a default except where
+# a gate below waits for it - the point of the gates is that a wrong page is caught here rather than
+# discovered as a wrong system later.
+step "network configuration"
+  input ret
+  settle 14
+
+step "the time zone - UTC"
+  do
+    item
+      input text "UTC"
+    item
+      input ret
+      settle 8
+    item
+      input ret
+      settle 6
+    item
+      input ret
+      settle 6
+
+step "services - sshd is already ticked"
+  input ret
+  settle 8
+
+step "hardening - nothing to hide on a throwaway guest"
+  input ret
+  settle 8
+
+step "firmware - skipped"
+  input ret
+  settle 10
+
+# THE ACCOUNT IS CREATED BY THE FINAL SHELL, as freebsd's walk does, because bsdinstall's own add-user
+# pane asks for a full name, a shell and group memberships that this walk has no use for.
+step "no account here"
+  do
+    item
+      input left
+      settle 1
+    item
+      input ret
+      settle 10
+
+step "final configuration - finish"
+  input ret
+  settle 12
+
+step "wait for the closing menu"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name end
+    until
+      bind at_end
+      source end
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[manual, configuration], [reboot], [live, cd]]
+    max 40
+
+# EXIT TO A SHELL RATHER THAN REBOOT, SO THE ACCOUNT AND ITS PASSWORD ARE SET ON THE INSTALLED SYSTEM.
+# The installer leaves the new root mounted at /mnt.
+step "open a shell in the new system"
+  do
+    item
+      input left
+      settle 1
+    item
+      input ret
+      settle 12
+
+step "prove the chroot is up"
+  repeat
+    do
+      item
+        settle 5
+      item "read the screen"
+        read
+          name chroot
+    until
+      bind shell_up
+      source chroot
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[midnightbsd]]
+    max 30
+
+step "the account"
+  do
+    item
+      settle 2
+      input text "pw useradd -n {{ user }} -m -s /bin/csh -G wheel"
+    item
+      input ret
+      settle 6
+    item
+      settle 2
+      input text "printf '%s' '{{ password }}' | pw usermod {{ user }} -h0 && echo PASSWORD_SET"
+    item
+      input ret
+      settle 6
+
+step "prove the account exists"
+  do
+    item
+      settle 2
+      input text "pw usershow {{ user }}"
+    item
+      input ret
+      settle 5
+
+step "let sshd accept a password, and start it at every boot"
+  do
+    item
+      settle 2
+      input text "sed -i '' 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config"
+    item
+      input ret
+      settle 5
+    item
+      settle 2
+      input text "sysrc sshd_enable=YES"
+    item
+      input ret
+      settle 5
+
+step "prove sshd's setting"
+  do
+    item
+      settle 2
+      input text "grep -c '^PasswordAuthentication yes' /etc/ssh/sshd_config"
+    item
+      input ret
+      settle 5
+
+step "flush the writes before the machine stops"
+  do
+    item
+      settle 2
+      input text "sync"
+    item
+      input ret
+      settle 15
+
+step "stop the machine"
+  stop "{{ shutdown }}"
+  timeout 300
+
+step "publish the disk"
+    save "{{ out }}"

@@ -50,16 +50,14 @@ jobs:
     with:
       image_repository: easydev-org/easyvm
       image_tag: v0.0.4
-      # TWENTY GIBABYTES, AND THE REASON IS THE PUBLISHER'S FLOOR RATHER THAN THE INSTALL.
+      # TWENTY GIBABYTES, AND THE DISK IS THE ONE THE WALK PARTITIONS - sysinst takes the whole of it.
       #
-      # MEASURED on run 45670461290: the walk FINISHED and the installed disk was 1,644 MiB - every
-      # set extracted - but `save` compresses with zstd and an FFS install is mostly zeros, so the
-      # published file came out 535,560,192 bytes. `stage.yml` refuses anything under 512 MiB as a
-      # header with nothing behind it, and this missed it by 0.2%.
-      #
-      # A BIGGER DISK GETS A BIGGER DEFAULT SWAP, and swap is written rather than sparse, so the
-      # compressed file rises with it. That is the honest way to clear the floor: the disk really does
-      # hold more, rather than the walk padding a file to satisfy a check.
+      # MEASURED on runs 45670461290 and 45674988364: the walk FINISHED with a 1,644 MiB installed
+      # disk - every set extracted - but `save` compresses with zstd and an FFS install is mostly
+      # zeros, so the published file came out 535,625,728 bytes against stage.yml's 512 MiB floor.
+      # Going from 10 to 20 GiB did NOT change it: sysinst's default swap does not grow with the disk,
+      # so the compressed size did not either. The floor is cleared in the walk itself, by writing
+      # real data into the disk rather than by asking for more of it - see `netbsd/steps/install.walk`.
       disk_gb: "20"
       group: netbsd-install
       disks_repository: ${{ inputs.disks_repository }}
