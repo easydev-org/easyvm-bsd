@@ -1,0 +1,67 @@
+name: netbsd
+
+# netbsd, AS ONE STAGE: sysinst, answered blind, to a published disk.
+#
+# THE WALK DOES NOT READ THE SCREEN AND THAT IS MEASURED, NOT LAZY. sysinst draws on a 720x400 VGA
+# text mode with a small low-contrast font and tesseract cannot read it - MEASURED, probing the menu
+# region of a live installer returned
+#
+#	none of "zzzznotpresent" in "j- oie alll i estes Meal AA eee Lelalaentaitor AA ..."
+#
+# The other three BSD installers here draw at 640x480 or larger and ARE read. So every step in
+# `netbsd/steps/install.walk` carries `settle:` and the sequence was measured key by key.
+#
+# THE MEDIUM IS BOOTED BY BIOS, NOT UEFI. sysinst writes GPT or MBR plus BIOS bootblocks; the medium
+# starts through its own El Torito image and the disk through the bootblocks it writes. A UEFI boot
+# would need an ESP this installer does not make on the default path.
+#
+# TWO ANSWERS DEFAULT TO `No` AND BOTH ARE NEEDED: `Shall we continue?` (pressing return there
+# returns to the main menu with nothing written) and `Enable sshd` / `Enable xdm`.
+#
+# THE BOOTBLOCKS PAGE IS A SELECTION, NOT A SUBMIT. `x: Continue` commits it and runs `installboot`;
+# MEASURED, a return there leaves sixteen zero bytes at offset 440 and the firmware falls through to
+# the CD-ROM with "Boot failed: Could not read from CDROM (code 0003)".
+#
+# THE NETWORK IS NOT CONFIGURED HERE. `Configure network` TERMINATES sysinst at its netmask prompt on
+# this medium - MEASURED, "sysinst terminated. To return to the installer, quit this shell ...". That
+# happens AFTER the sets are extracted, so the disk is complete. Xfce and the interface come up in
+# `ssh.walk`, because a package install is a network operation and this stage has none.
+
+on:
+  workflow_dispatch:
+    inputs:
+      disks_repository:
+        description: "the ghcr repository that holds the disks"
+        default: "easydev-org/easyvm-bsd"
+
+concurrency:
+  group: netbsd-install
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  checks: write
+
+jobs:
+  install:
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.4
+    secrets: inherit
+    with:
+      image_repository: easydev-org/easyvm
+      image_tag: v0.0.4
+      disk_gb: "10"
+      group: netbsd-install
+      disks_repository: ${{ inputs.disks_repository }}
+      stages: |
+        [
+          {
+            "name": "bsd-netbsd-install",
+            "file": "netbsd/steps/install.walk",
+            "pull": "",
+            "assets": ["iso-netbsd:netbsd.iso.tar"],
+            "out": "bsd-netbsd-install.qcow2",
+            "publish": "bsd-netbsd-install",
+            "timeout": 120
+          }
+        ]
