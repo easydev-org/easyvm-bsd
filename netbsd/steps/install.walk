@@ -363,6 +363,21 @@ step "finish configuring"
 # files into a root that had no `bin/` for them to live in.
 #
 
+# THE DEVICE NODES EXIST AND THE DISK BEHIND THEM DOES NOT, WHICH NAMES THE DEFECT EXACTLY.
+#
+# MEASURED in the installer's own shell on that disk:
+#
+#	# ls /dev/sd* | head
+#	/dev/sd0  /dev/sd0a  /dev/sd0b  /dev/sd0c  /dev/sd0d  /dev/sd0e
+#	# dkctl sd0 listwedges
+#	dkctl: sd0: Device not configured
+#	# mount /dev/sd0a /mnt
+#	mount: cannot open '/dev/sd0a': Device not configured
+#
+# So devfs published the names and DKWEDGE never attached a disk behind them - sysinst wrote 1.7 GiB
+# through the raw device and the slice it names afterwards does not exist. The same holds for `ld0`
+# (`dkctl ld0 listwedges` -> "no wedges configured"). Both disk types, both releases, one defect.
+#
 # AND A SCSI DISK FAILS THE SAME WAY, SO THE DISK TYPE IS NOT THE VARIABLE EITHER.
 #
 # MEASURED with the disk attached as `scsi-hd` on `virtio-scsi-pci` - which sysinst lists as
