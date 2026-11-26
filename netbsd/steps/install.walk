@@ -363,6 +363,24 @@ step "finish configuring"
 # files into a root that had no `bin/` for them to live in.
 #
 
+# AND A SCSI DISK FAILS THE SAME WAY, SO THE DISK TYPE IS NOT THE VARIABLE EITHER.
+#
+# MEASURED with the disk attached as `scsi-hd` on `virtio-scsi-pci` - which sysinst lists as
+# `sd0 (32G, QEMU HARDDISK)`, its most ordinary path - the install ran to completion (1,743,650,816
+# bytes written) and then:
+#
+#	# fsck -y /dev/rsd0a ; mount /dev/sd0a /mnt
+#	mount: cannot open '/dev/sd0a': Device not configured
+#	# ls -la /mnt | head
+#	total 6
+#	drwxr-xr-x 2 root wheel 2048 Sep 15 17:50 .
+#	drwxr-xr-x 20 root wheel 4096 Jan  1 1970 ..
+#	ls /mnt/netbsd: No such file or directory
+#
+# `/mnt` holds TWO entries, the mount did not happen at all, and `/netbsd` is not there. So the same
+# defect appears on sd, ld and every medium tried: sysinst writes the sets' bytes and produces no
+# usable tree, and the mount of the root slice is refused either way.
+#
 # AND NETBSD 10.2 FAILS THE SAME WAY, SO THIS IS NOT AN 11.1 BUG. MEASURED with the identical walk and
 # only the medium swapped (NetBSD-10.2-amd64.iso, sha512 852a43c4... verified):
 #
