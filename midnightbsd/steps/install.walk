@@ -448,14 +448,35 @@ step "select the utc region, which is the last entry in the list"
   do
     item
       settle 3
-    # THE LIST IS `Select a region` AND `UTC` IS ITS LAST ROW. MEASURED: the first PageDown lands on
-    # the bottom, where UTC is already highlighted.
+    # NINE `down`s, NOT EIGHT: MEASURED, eight landed on `9 Pacific Ocean` and its RETURN opened the
+    # Pacific island list instead of setting a timezone. The pane has ten rows and UTC is the tenth.
     item
-      input pgdn
+      input down
+      settle 1
+    item
+      input down
+      settle 1
+    item
+      input down
+      settle 1
+    item
+      input down
+      settle 1
+    item
+      input down
+      settle 1
+    item
+      input down
+      settle 1
+    item
+      input down
+      settle 1
+    item
+      input down
+      settle 1
+    item
+      input down
       settle 2
-    item
-      input ret
-      settle 10
 
 step "confirm the abbreviation"
   do
