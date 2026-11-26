@@ -556,16 +556,99 @@ step "hardening - nothing to hide on a throwaway guest"
 # `No` AND NOT `Yes`: MEASURED, a Tab here chose Yes and the installer opened `Add Users
 # / Username:`, where it then complained "You must enter a username!" for every RETURN. `right` moves
 # within the `<Yes> <No>` row and lands on No.
-step "no user accounts here"
+# THE ACCOUNT IS MADE BY THE INSTALLER'S OWN `Add Users`, WHICH IS WHERE THE DEFAULT LANDS.
+#
+# MEASURED three times: `<Yes> <No>` on `Add User Accounts?` could not be moved to No from here -
+# `right` arrived as the literal bytes ^[[C and `Add Users / Username:` then typed that escape
+# sequence into its own prompts, and `ctrl+d` did not leave. `Yes` is the default and it is also what
+# this walk needs, so the account is created HERE, on the panes adduser asks for in this order:
+#
+#	Username:            vmuser
+#	Full name:           VM User
+#	Uid (Leave empty):   (default)
+#	Login group:         (default)
+#	Invite ... :         (default)
+#
+# and then the `Add another user?` question takes `No`, which returns to the configuration menu.
+# THE ACCOUNT IS MADE BY THE INSTALLER'S OWN `Add Users`, WHOSE PROMPT LIST IS NOW MEASURED.
+#
+# `<Yes> <No>` on `Add User Accounts?` cannot be moved to No from here - `right` arrived as the literal
+# bytes ^[[C and adduser then typed that escape sequence into its own prompts - and `Yes` is the
+# default anyway. So the account is created here, and this is every prompt the pane asks, in order:
+#
+#	Username:                                        vmuser
+#	Full name:                                       VM User
+#	Uid (Leave empty for default):                   (empty)
+#	Login group is vmuser. Invite ... other groups:   (empty)
+#	Login class [default]:                           (empty)
+#	Shell (sh csh tcsh mksh ksh rksh nologin) [mksh]: (empty -> mksh)
+#	Home directory [/home/vmuser]:                    (empty)
+#	Home directory permissions (Leave empty):         (empty)
+#	Use password-based authentication? [yes]:         (empty -> yes)
+#	Use an empty password? [no]:                      (empty -> no)
+#	Enter password:                                   the password
+#	Enter password again:                             the password
+#	Lock out the account after creation? [no]:        (empty)
+#
+# MEASURED: a shorter list put `admin1` into `Invite vmuser into other groups?` and `Shell`, and the
+# installer answered "Invalid shell (admin1) for user vmuser".
+step "add the account with the installer's own adduser"
   do
     item
       settle 5
     item
-      input right
-      settle 2
+      input ret
+      settle 6
+    item
+      input text "{{ user }}"
     item
       input ret
-      settle 12
+      settle 4
+    item
+      input text "VM User"
+    item
+      input ret
+      settle 4
+    item
+      input ret
+      settle 3
+    item
+      input ret
+      settle 3
+    item
+      input ret
+      settle 3
+    item
+      input ret
+      settle 3
+    item
+      input ret
+      settle 3
+    item
+      input ret
+      settle 3
+    item
+      input ret
+      settle 3
+    item
+      input ret
+      settle 3
+    item
+      input ret
+      settle 4
+    item
+      input text "{{ password }}"
+    item
+      input ret
+      settle 4
+    item
+      input text "{{ password }}"
+    item
+      input ret
+      settle 4
+    item
+      input ret
+      settle 8
 
 step "wait for the final configuration menu"
   repeat
