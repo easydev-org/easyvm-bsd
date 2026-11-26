@@ -675,9 +675,18 @@ step "add the account with the installer's own adduser"
     item
       input ret
       settle 4
+    # `Lock out the account after creation? [no]`
     item
       input ret
-      settle 8
+      settle 3
+    # The summary pane, whose last line is `OK? (yes/no) [yes]`.
+    item
+      input ret
+      settle 5
+    # `Add another user? (yes/no) [no]` -> back to the configuration menu.
+    item
+      input ret
+      settle 10
 
 step "wait for the final configuration menu"
   repeat
@@ -693,7 +702,19 @@ step "wait for the final configuration menu"
       mode text
       rect [100, 100, 620, 400]
       rect_at [720, 400]
-      words [[setup, of, your, midnightbsd]]
+      # THE MENU'S OWN ENTRIES, NOT ITS TITLE. MEASURED: the frame reads
+      #
+      #	Add a user to the system
+      #	Change root password
+      #	Set system hostname
+      #	Networking configuration
+      #	Set daemons to run on startup
+      #	Set security options
+      #	Set system timezone
+      #
+      # - the title line `Setup of your MidnightBSD system is nearly complete.` is drawn above the box
+      # and the model drops it, exactly as it drops the other light-blue headings on this console.
+      words [[change, root, password], [set, system, hostname], [set, daemons], [set, security]]
     max 40
 
 # THE MENU'S LAST ENTRY IS `Exit`, AND THE INSTALLER THEN DROPS TO A SHELL ON THE NEW SYSTEM.
@@ -809,11 +830,39 @@ step "prove the account and the fstab the installer wrote"
 # because the loader's default root name is a SCSI/SATA one and virtio's `vtbd0s1a` is not guessed.
 # `vfs.root.mountfrom` is the FreeBSD-family setting that answers it, and it belongs in the installed
 # system's /boot/loader.conf - which is this shell.
-step "tell the loader which disk is the root"
+# THE FSTAB THE INSTALLER WRITES HAS A COMMENT LINE ITS PARSER REJECTS, AND THAT IS THE REAL FAULT.
+#
+# MEASURED on the 3.1 GiB disk, booting with no medium:
+#
+#	mountroot> ufs:/dev/vtbd0s1a
+#	Mounting late filesystems:fstab: /etc/fstab:1: Inappropriate file type or format
+#	fstab: /etc/fstab:1: Inappropriate file type or format
+#	MidnightBSD FirstBoot Configuration
+#
+# "/etc/fstab:1" IS LINE ONE, AND LINE ONE IS `# Device Mountpoint FStype Options Dump Pass#` - the
+# header comment the installer writes above the two real entries. This release's mount(8) reads it as
+# a malformed entry, so the root line after it is never applied and the loader has to be told the root
+# by hand.
+#
+# So both are fixed here: the loader gets `vfs.root.mountfrom` (which covers the boot), and the fstab
+# is rewritten without the header (which covers every later mount).
+step "rewrite fstab without its header, and tell the loader the root"
   do
     item
       settle 2
-      input text "printf '%s\n' 'vfs.root.mountfrom=\"ufs:/dev/vtbd0s1a\"' >> /boot/loader.conf && cat /boot/loader.conf"
+      input text "printf '%s\n' '/dev/vtbd0s1a / ufs rw 1 1' '/dev/vtbd0s1b none swap sw 0 0' > /etc/fstab"
+    item
+      input ret
+      settle 5
+    item
+      settle 2
+      input text "printf '%s\n' 'vfs.root.mountfrom=\"ufs:/dev/vtbd0s1a\"' >> /boot/loader.conf"
+    item
+      input ret
+      settle 5
+    item
+      settle 2
+      input text "cat /etc/fstab; echo ===; cat /boot/loader.conf"
     item
       input ret
       settle 8
