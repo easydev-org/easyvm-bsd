@@ -144,10 +144,37 @@ step "install, then the default keymap"
       input ret
       settle 12
 
+# THE HOSTNAME PANE NEEDS ITS OWN GATE ON CI, WHICH IS FASTER THAN THE POD.
+#
+# MEASURED on run 45849040842: the walk reached this step while the pane was still drawing, typed
+# into nothing, and the run then died at the component gate with
+#
+#	none of "distribution select" or "optional system components" in
+#	"Please choose a hostname for this machine. If you are ..."
+#
+# - the hostname pane, four steps late. So the pane is WAITED FOR, then filled, then a second RETURN
+# covers the case where the first arrived with the field not yet focused.
+step "wait for the hostname pane"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name host
+    until
+      bind at_host
+      source host
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[choose, a, hostname], [hostname, for, this, machine]]
+    max 40
+
 step "the hostname"
   do
     item
-      settle 4
+      settle 3
     item
       input text "midnightbsd"
     item
