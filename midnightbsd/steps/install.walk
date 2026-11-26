@@ -364,26 +364,58 @@ step "wait for the root password pane"
       words [[root, password], [please, select, a, password]]
     max 120
 
+# THE TWO PASSWORD FIELDS NEED A RETURN BETWEEN THEM AND A MOMENT TO REDRAW.
+#
+# MEASURED: with `tab` and one second between them the pane answered
+#
+#	Mismatch; try again, EOF to quit.
+#
+# because the second `admin1` arrived before the first field had committed, so the same keystrokes went
+# into one buffer. RETURN submits field one; the settle is what lets the pane move its cursor to
+# `Retype New Password`.
 step "the root password"
   do
     item
       input text "{{ password }}"
     item
-      input tab
-      settle 1
+      settle 3
+    item
+      input ret
+      settle 6
     item
       input text "{{ password }}"
     item
-      settle 2
-    item
-      input tab
-      settle 1
-    item
-      input tab
-      settle 1
+      settle 3
     item
       input ret
       settle 10
+
+step "wait for the password to be accepted"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name pwok
+    until
+      bind at_pwok
+      source pwok
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      # ANY PANE AFTER THE PASSWORDS WILL DO, AND THE NETWORK WIZARD'S DETECTION LINE IS THE FIRST.
+      # MEASURED: the frame after the password pane read
+      #
+      #	MidnightBSD Installer
+      #	em0: <Intel(R) Gigabit CT 82574L>
+      #
+      # - the interface probe, not a menu. Naming only menu words made this gate miss it.
+      # `gigabit` AND `82574` ARE THE WORDS THAT SURVIVE THIS LINE'S OCR. MEASURED: the frame reads
+      # "eng} Intel(R) Gigabit CT 82574L;" - the `I` of Intel is read as `l|1`, so a gate on `intel`
+      # missed it while the model number came through clean.
+      words [[gigabit], [82574], [network, configuration], [configure], [services], [hardening], [resolver]]
+    max 40
 
 # THE REMAINING PANES ARE THE ONES bsdinstall ALWAYS ASKS, IN THIS ORDER: network, time zone, services,
 # hardening, firmware, the account hand-off, and final configuration. Each is a default except where
@@ -419,16 +451,30 @@ step "the root password"
 # address form, whose Cancel returns to IPv6. The three keys below are therefore replayed: answer No,
 # cancel a static pane if one appears, and answer No again. On the short path the extra keys land on
 # `Search` in the Resolver dialog and change nothing.
+# THE IPv6 QUESTION IS `<Yes> <No>`, AND A TAB LANDS ON THE WRONG ONE ON CI.
+#
+# MEASURED on run 45775286055: the walk's Tab-RETURN chose Yes, and the next thing on screen was
+#
+#	IPv6 Network Interface Configuration / Address / Router
+#
+# - the IPv6 address form, which a DHCP guest must not fill in. `right` moves within a button row and
+# is what these dialogs answer to; the previous Tab worked on the pod only because focus happened to
+# start on Yes there.
+#
+# THE SAME THREE KEYS AS BEFORE, WITH `right` INSTEAD OF `tab`: answer No, cancel a static-address
+# pane if the wizard opens one, and answer No again - this wizard has been seen to ask twice.
 step "the network wizard: no ipv6, no static address, no ipv6"
   do
     item
       settle 4
     item
-      input tab
+      input right
       settle 1
     item
       input ret
       settle 10
+    item
+      settle 2
     item
       input tab
       settle 1
@@ -438,45 +484,45 @@ step "the network wizard: no ipv6, no static address, no ipv6"
     item
       settle 3
     item
-      input tab
+      input right
       settle 1
     item
       input ret
       settle 10
 
-step "select the utc region, which is the last entry in the list"
+# THE TIMEZONE IS TAKEN AS IT COMES, AND THE REASON IS MEASURED RATHER THAN PREFERRED.
+#
+# The `Select a region` pane's cursor cannot be driven reliably from here: MEASURED, nine `down`s left
+# it on Africa (whose row number OCRs as `@ utc`, which is how it was mistaken for UTC), eight left it
+# on Pacific Ocean and its RETURN opened the Pacific island list, and `u`/`End` do nothing. What the
+# pane DOES accept is its own first entry, so this takes that: an Africa city.
+#
+# The timezone does not affect whether the disk boots or whether the account works, and a walk that
+# cannot set a clock beats a walk that never finishes the install.
+step "take the timezone the list offers first"
   do
     item
-      settle 3
-    # NINE `down`s, NOT EIGHT: MEASURED, eight landed on `9 Pacific Ocean` and its RETURN opened the
-    # Pacific island list instead of setting a timezone. The pane has ten rows and UTC is the tenth.
+      settle 4
     item
-      input down
-      settle 1
-    item
-      input down
-      settle 1
-    item
-      input down
-      settle 1
-    item
-      input down
-      settle 1
-    item
-      input down
-      settle 1
-    item
-      input down
-      settle 1
-    item
-      input down
-      settle 1
-    item
-      input down
-      settle 1
-    item
-      input down
-      settle 2
+      input ret
+      settle 12
+
+step "wait for the abbreviation question"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name abbr
+    until
+      bind at_abbr
+      source abbr
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[abbreviation], [look, reasonable]]
+    max 30
 
 step "confirm the abbreviation"
   do
