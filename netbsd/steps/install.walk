@@ -516,7 +516,10 @@ step "the reboot reached the medium's own menu, which means the disk was release
       rect [0, 0, 1920, 1080]
       rect_at [1920, 1080]
       scale 2
-      words [[installation, messages, in, english], [welcome, to, the, netbsd]]
+      # THE REBOOT LANDS ON THE INSTALL SYSTEM'S MAIN MENU, NOT ON THE LANGUAGE LIST. MEASURED: it
+      # re-enters the medium at `NetBSD-11.1 Install System / a: Install NetBSD to hard disk`. Either
+      # menu proves the reboot ran and the disk was released, so both are accepted.
+      words [[install, netbsd, to, hard, disk], [installation, messages, in, english], [welcome, to, the, netbsd]]
     max 40
 
 step "stop the machine"
