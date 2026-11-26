@@ -464,20 +464,45 @@ step "the completion notice"
       input ret
       settle 12
 
-step "reboot from the main menu, which syncs and unmounts"
-  do
-    item
-      settle 4
-    item
-      input text "d"
-    item
-      input ret
-      settle 25
+# `d: Reboot the computer` SYNCS AND UNMOUNTS; THEN THE MACHINE BOOTS THE MEDIUM AGAIN.
+#
+# MEASURED on CI run 45890377885, the first run with this ending: the disk came out 1,643 MiB with
+# every set in it, and the only failure was the `wait_until stopped` after it -
+#
+#	status: failed step 31/32 "wait for the machine to stop on its own"
+#
+# because `d` REBOOTS: sysinst syncs and unmounts, then the firmware starts the medium again (it is
+# still bootindex=0) and the guest is alive on the installer's language menu. So the machine never
+# stops, and waiting for it to stop is waiting for something that cannot happen.
+#
+# WHAT MATTERS IS THE UNMOUNT, AND IT HAS ALREADY HAPPENED BY THE TIME THE LANGUAGE MENU IS BACK: that
+# is the same disk whose `/` listed
+#
+#	bin boot dev etc kern lib libdata libexec mnt netbsd proc rescue root sbin stand tmp usr var
+#
+# when this walk's ending was driven by hand in the pod. So this step waits for the language menu -
+# proof the reboot completed and the disk was released - and the stage then stops the machine.
+step "the reboot reached the medium's own menu, which means the disk was released"
+  repeat
+    do
+      item
+        settle 15
+      item "read the screen"
+        read
+          name back
+    until
+      bind released
+      source back
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      scale 2
+      words [[installation, messages, in, english], [welcome, to, the, netbsd]]
+    max 40
 
-step "wait for the machine to stop on its own"
-  wait_until stopped
-  timeout 600
-
+step "stop the machine"
+  stop "{{ shutdown }}"
+  timeout 300
 
 step "publish the disk"
     save "{{ out }}"
