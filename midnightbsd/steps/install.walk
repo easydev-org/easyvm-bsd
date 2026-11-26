@@ -479,6 +479,28 @@ step "network - no ipv6"
       input ret
       settle 12
 
+# THE NETWORK WIZARD'S PATH DEPENDS ON WHAT THE GUEST'S DHCP LEASE LOOKS LIKE, AND CI DIFFERS.
+#
+# MEASURED: the pod went IPv6 -> Resolver Configuration -> timezone. CI, on the same walk, went IPv6 ->
+# **Static Network Interface Configuration** (IP Address / Subnet Mask / Default Router) and stayed
+# there, because its tap did not answer the way the pod's did. The walk then typed a timezone into a
+# text field.
+#
+# `Cancel` on that pane is the answer either way: this guest is on DHCP and the install does not need
+# a static address. The step is written as a `when` so it costs nothing on the path that never shows it.
+step "cancel a static address pane if the wizard offers one"
+  when [static]
+  do
+    item
+      settle 2
+    # `Cancel` is the second button on that pane.
+    item
+      input tab
+      settle 1
+    item
+      input ret
+      settle 10
+
 step "resolver configuration - the defaults"
   do
     item
