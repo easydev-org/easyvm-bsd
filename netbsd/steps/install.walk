@@ -332,18 +332,59 @@ step "finish configuring"
       input ret
       settle 20
 
-# THE INSTALLER'S LAST ACT IS TO ASK WHETHER TO REBOOT OR DROP TO A SHELL. The disk is complete and
-# the machine is about to be killed anyway, so the answer is the halt - `d` on the final menu - and a
-# plain return is harmless if the menu is not the one expected.
-step "the installer's ending"
+# THE INSTALLER MUST UNMOUNT THE DISK, AND KILLING qemu IS WHAT CORRUPTED IT.
+#
+# MEASURED on the 1.75 GiB disk this walk published, mounted from the installer's own shell:
+#
+#	# ls -la /mnt | head
+#	total 326
+#	drwx-----T 2550 root wheel 182272 Nov 26 08:22 lost+found
+#	-r--r--r--   1 root wheel  86092 Nov 26 07:45 boot
+#	drwxr-xr-x   2 root wheel   2048 Nov 26 07:55 etc
+#	drwxr-xr-x   2 root wheel  46592 Nov 26 07:46 dev
+#	drwxr-xr-x   2 root wheel    512 Nov 26 07:44 kern
+#	# ls /mnt/netbsd
+#	ls: /mnt/netbsd: No such file or directory
+#
+# AND THE REBOOT WAS TRIED TOO, WITH THE SAME RESULT - SO IT IS NOT ONLY THE KILL.
+#
+# MEASURED on the disk from the run that answered `r` (reboot) at the installer's ending: after the
+# machine restarted, the disk still mounted with
+#
+#	drwx-----T 2550 root wheel 182272  lost+found
+#	-r--r--r--   1 root wheel  86092  boot
+#	drwxr-xr-x   2 root wheel   2048  etc
+#	drwxr-xr-x   2 root wheel   512  kern
+#	# ls /mnt/netbsd          -> No such file or directory
+#
+# and `/mnt` holds NOTHING BUT `boot cdrom dev etc kern lost+found proc var`. There is no `bin`, no
+# `sbin`, no `lib`, no `usr` - the directories `base.tar.xz` is made of. So the sets' files reached the
+# disk as 2,550 ORPHANED INODES and their directory tree was never created: the extractor wrote the
+# files into a root that had no `bin/` for them to live in.
+#
+# THAT IS A DEFECT IN sysinst AS IT RUNS HERE, and the reboot does not fix it. What the reboot DOES
+# fix, and why it stays, is the clean unmount - a disk a later stage can fsck without losing names.
+#
+# SO THE ENDING IS THE INSTALLER'S OWN REBOOT, WHICH UNMOUNTS. `r` is the third character of
+#   Exit to (S)hell, (H)alt or (R)eboot? [reboot]
+# and the default is already `reboot`, so the RETURN is what takes it; the `r` before it covers the
+# case where the menu highlights something else.
+step "reboot, which unmounts the disk before the machine stops"
   do
     item
+      settle 3
+    item
+      input text "r"
+    item
       input ret
-      settle 20
+      settle 30
 
-step "stop the machine"
-  stop "{{ shutdown }}"
-  timeout 300
+# AND THE MACHINE IS THEN STOPPED BY THE GUEST ITSELF, not by qemu being killed under it. The wait
+# gives the unmount and the sync time to land before this stage saves anything.
+step "wait for the machine to stop on its own"
+  wait_until stopped
+  timeout 600
+
 
 step "publish the disk"
     save "{{ out }}"
