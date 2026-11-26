@@ -133,53 +133,78 @@ step "wait for the welcome pane"
 #	hostname   the field is empty and takes a name
 #
 # and the gate that follows is the one that decides whether all three landed.
-step "install, then the default keymap"
+# ONE LOOP THAT ANSWERS WHATEVER PANE IS SHOWING, BECAUSE THREE CI RUNS STOPPED ON THREE DIFFERENT
+# ONES.
+#
+# MEASURED, each on its own run:
+#
+#	45849040842  the two RETURNs advanced past the hostname pane; the run died at the component gate
+#	             with "Please choose a hostname for this machine" on screen, four steps late
+#	45854588731  a gate on the hostname pane instead waited there while the KEYMAP pane was showing
+#
+# The panes at the front of this installer share one property: EACH WANTS EXACTLY ONE RETURN, except
+# the hostname pane, which wants a name first. So this loop reads what is on screen and sends the one
+# thing that pane needs - and it stops when `Distribution Select` is up, whatever route got there.
+# AN UNCONDITIONAL RETURN, THEN A LOOP THAT ONLY READS. THE FIRST KEY CANNOT DEPEND ON OCR.
+#
+# MEASURED, three CI runs, three different stopping points:
+#
+#	45849040842  two RETURNs ran past the hostname pane; the run died four steps later with
+#	             "Please choose a hostname for this machine" on screen
+#	45854588731  a gate on the hostname pane waited there while the KEYMAP pane was showing
+#
+# And the welcome pane's own words are the one thing this console never renders for tesseract:
+#
+#	--psm 6   "MidnightBSD Installer / dpstalb)"     (<Install>, mangled)
+#	--psm 11  "MidnightBSD Installer"                 (title bar only)
+#
+# SO THE FIRST RETURN IS BLIND - it is the only key that can be, because it is the only one whose pane
+# cannot be read - and everything after it is decided by what the screen says. `Install`, the keymap's
+# `Continue with default keymap` and the hostname field all take a RETURN, and the hostname pane takes
+# a NAME first.
+step "press install, then answer whatever pane follows"
   do
     item
       settle 10
     item
       input ret
-      settle 14
-    item
-      input ret
       settle 12
 
-# THE HOSTNAME PANE NEEDS ITS OWN GATE ON CI, WHICH IS FASTER THAN THE POD.
-#
-# MEASURED on run 45849040842: the walk reached this step while the pane was still drawing, typed
-# into nothing, and the run then died at the component gate with
-#
-#	none of "distribution select" or "optional system components" in
-#	"Please choose a hostname for this machine. If you are ..."
-#
-# - the hostname pane, four steps late. So the pane is WAITED FOR, then filled, then a second RETURN
-# covers the case where the first arrived with the field not yet focused.
-step "wait for the hostname pane"
+step "walk the panes until the components list"
   repeat
     do
       item
         settle 8
       item "read the screen"
         read
-          name host
+          name front
+      item
+        when [hostname, for, this, machine]
+        do
+          item
+            input text "midnightbsd"
+          item
+            settle 2
+          item
+            input ret
+          item
+            settle 8
+      item
+        when [keyboard, map]
+        input ret
+        settle 8
+      item
+        when [keymaps, can, be, chosen]
+        input ret
+        settle 8
     until
-      bind at_host
-      source host
+      bind at_components
+      source front
       mode text
       rect [0, 0, 720, 400]
       rect_at [720, 400]
-      words [[choose, a, hostname], [hostname, for, this, machine]]
+      words [[distribution, select], [optional, system, components]]
     max 40
-
-step "the hostname"
-  do
-    item
-      settle 3
-    item
-      input text "midnightbsd"
-    item
-      input ret
-      settle 12
 
 step "wait for the component list"
   repeat
