@@ -939,9 +939,11 @@ step "wait for the complete pane"
       #	none of "installation of midnightbsd complete" or "reboot into the installed" in
       #	"MidnightBSD Installer <[pstall>"
       #
-      # - `Welcome ... <Install>` as tesseract renders it. So the gate accepts `install` too, which is
-      # the one word that page always produces.
-      words [[installation, of, midnightbsd, complete], [reboot, into, the, installed], [welcome, to, midnightbsd], [install]]
+      # - `Welcome ... <Install>` as tesseract renders it, and the text of the paragraph above the
+      # buttons is NOT read at all on that frame: a --psm 6 pass of the same capture returns only
+      # `MidnightBSD Installer` and `dpstalb)`. So the gate names the fragment the model DOES produce
+      # for the button, `pstall`, alongside the Complete pane's own sentences.
+      words [[installation, of, midnightbsd, complete], [reboot, into, the, installed], [welcome, to, midnightbsd], [install, midnightbsd], [pstall]]
     max 40
 
 # `Reboot` IS THE FIRST BUTTON AND IT UNMOUNTS BEFORE RESTARTING.
