@@ -507,28 +507,32 @@ step "take the timezone the list offers first"
       input ret
       settle 12
 
-step "wait for the abbreviation question"
+# THE PANE AFTER THE TIMEZONE IS NOT ALWAYS THE ABBREVIATION QUESTION.
+#
+# MEASURED: choosing the region's first entry (an Africa city) went straight on to the DATE pane and
+# then SERVICES and HARDENING, with no "Does the abbreviation look reasonable?" step at all - that
+# question only appears for some regions. A gate naming it therefore never closed while the installer
+# was four panes ahead.
+#
+# So this gate accepts ANY of the panes that follow: the abbreviation question, the date calendar, the
+# services list, or the hardening list. What it is really asking is "did the timezone pane accept the
+# key", and any of those answers that.
+step "the timezone was accepted"
   repeat
     do
       item
         settle 8
       item "read the screen"
         read
-          name abbr
+          name after_tz
     until
-      bind at_abbr
-      source abbr
+      bind past_tz
+      source after_tz
       mode text
       rect [0, 0, 720, 400]
       rect_at [720, 400]
-      words [[abbreviation], [look, reasonable]]
-    max 30
-
-step "confirm the abbreviation"
-  do
-    item
-      input ret
-      settle 10
+      words [[abbreviation], [month, year], [services], [hardening], [additional, items]]
+    max 40
 
 step "accept the date"
   do
@@ -549,13 +553,16 @@ step "hardening - nothing to hide on a throwaway guest"
       settle 12
 
 # `No`, AND IT IS A DIFFERENT PANE FROM THE ONE THIS FILE USED TO ANSWER.
+# `No` AND NOT `Yes`: MEASURED, a Tab here chose Yes and the installer opened `Add Users
+# / Username:`, where it then complained "You must enter a username!" for every RETURN. `right` moves
+# within the `<Yes> <No>` row and lands on No.
 step "no user accounts here"
   do
     item
-      settle 4
+      settle 5
     item
-      input tab
-      settle 1
+      input right
+      settle 2
     item
       input ret
       settle 12
