@@ -63,25 +63,25 @@ step "boot the installer"
     # there. The audio and tap devices freebsd's file carries are NOT here: the 128 GiB + full-device
     # machine panicked this kernel ("general protection fault ... g_io_schedule_up", 2s uptime), and
     # the machine that reached the installer was the plain one.
-    # IDE AND NOT VIRTIO, BECAUSE THIS KERNEL DOES NOT ADOPT A VIRTIO DISK AS ITS ROOT.
+    # THE DISK STAYS VIRTIO, AND `vfs.root.mountfrom` IS WHAT MAKES IT THE ROOT.
     #
-    # MEASURED on the 3.1 GiB disk this walk produced, booted with no medium attached:
-
+    # THE EARLIER NOTE HERE SAID THIS KERNEL DOES NOT SUPPORT VIRTIO, AND THAT WAS WRONG. MidnightBSD's
+    # own 4.0 release notes say "The suite of VirtIO device drivers now support the VirtIO V1 spec",
+    # and the kernel plainly sees the disk - MEASURED, booting the 3.1 GiB image with no medium:
     #
-    #	mountroot> [type a path and RETURN]
+    #	mountroot> [manual prompt]
     #	eg. ufs:/dev/da0s1a
     #	2 List valid disk boot devices
+    #	  cd0 vtbd0s1b vtbd0s1a vtbd0s1 vtbd0
     #
-
-    # - the kernel fell through to its manual mount prompt because it could not find `/` by itself. The
-    # device list (`2`) did show `vtbd0s1a`, and typing `ufs:/dev/vtbd0s1a` booted the system all the
-    # way to
+    # `vtbd0s1a` is in that list and typing `ufs:/dev/vtbd0s1a` boots to `MidnightBSD FirstBoot
+    # Configuration`. What fails is only the DEFAULT: the loader's own example is `ufs:/dev/da0s1a`, a
+    # SCSI/SATA name, so the automatic lookup does not guess the virtio name.
     #
-    #	MidnightBSD FirstBoot Configuration
-    #
-    # so the disk is complete and the only fault is that this release's root-mount does not know
-    # virtio. `ada0s1a` is the name an IDE disk gets, and that is the one its own help text suggests.
-    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "4096"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=midnightbsd.iso,media=cdrom,readonly=on,if=none,id=media0"], ["-device", "ide-cd,drive=media0,bootindex=0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,id=target"], ["-device", "ide-hd,drive=target,bootindex=1"]]
+    # `vfs.root.mountfrom` is the FreeBSD-family answer, and the install walk writes it into the new
+    # system's /boot/loader.conf (see the shell step at the end). The alternative - a SATA disk - was
+    # tried and this qemu has no `ahci-hd` device, so it is the loader that carries the fact instead.
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "4096"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=midnightbsd.iso,media=cdrom,readonly=on,if=none,id=media0"], ["-device", "ide-cd,drive=media0,bootindex=0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=1"]]
     timeout 1800
 
 # BIOS, NOT UEFI, AND THE REASON IS MEASURED RATHER THAN PREFERRED.
@@ -800,14 +800,38 @@ step "prove the account and the fstab the installer wrote"
       input ret
       settle 8
 
+# THIS ONE LINE IS WHY THE DISK BOOTS WITHOUT A HAND-TYPED MOUNTROOT.
+#
+# MEASURED: with the fstab the installer writes (`/dev/vtbd0s1a / ufs rw 1 1`) the boot still stops at
+#
+#	mountroot> eg. ufs:/dev/da0s1a
+#
+# because the loader's default root name is a SCSI/SATA one and virtio's `vtbd0s1a` is not guessed.
+# `vfs.root.mountfrom` is the FreeBSD-family setting that answers it, and it belongs in the installed
+# system's /boot/loader.conf - which is this shell.
+step "tell the loader which disk is the root"
+  do
+    item
+      settle 2
+      input text "printf '%s\n' 'vfs.root.mountfrom=\"ufs:/dev/vtbd0s1a\"' >> /boot/loader.conf && cat /boot/loader.conf"
+    item
+      input ret
+      settle 8
+
 step "let sshd accept a password"
   do
     item
       settle 2
-      input text "sed -i '' 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config; grep -c '^PasswordAuthentication yes' /etc/ssh/sshd_config"
+      input text "sed -i '' 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config"
     item
       input ret
-      settle 8
+      settle 6
+    item
+      settle 2
+      input text "grep -c '^PasswordAuthentication yes' /etc/ssh/sshd_config"
+    item
+      input ret
+      settle 6
 
 # THE UNMOUNT IS THE POINT, SO THIS IS NOT A KILL.
 step "flush and leave the shell, so the installer unmounts"
