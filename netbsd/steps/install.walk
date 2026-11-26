@@ -33,6 +33,24 @@
 #
 # That is A DEFECT IN sysinst AS IT RUNS HERE, and it is recorded rather than papered over: every page
 # of this walk was answered as measured, and `/` still has no kernel in it.
+
+# AND THE SETS WERE NEVER UNPACKED AT ALL. MEASURED on that disk's raw image:
+#
+#	offset      32 KB   2,460 non-zero bytes   (bootxx_ffsv2, and the disklabel after it)
+#	offset      10 MB   3,349 non-zero bytes   (the ffs superblock)
+#	offset       5 MB          0
+#	offset      50 MB          0
+#	offset     100 MB          0
+#	offset     200 MB          0
+#
+# The qcow2 is 1.7 GiB because qemu-img allocates in 64 KiB clusters for whatever it was asked to
+# write, but the DISK holds a boot block, a superblock and the eight skeleton directories sysinst
+# makes - no `bin`, no `sbin`, no kernel. So `a: Full installation` answered the menu without
+# extracting anything, which is the same failure the two CI runs show from the other side: 510 MiB
+# compressed, under the floor, and a boot that stops at `open netbsd/kernel: No such file`.
+#
+# EVERY PAGE OF THIS WALK WAS ANSWERED AS MEASURED. The install does not complete on this medium in
+# this environment, and no key sequence fixes a set that is never unpacked.
 #
 # THE SEQUENCE IS STILL MEASURED, KEY BY KEY, IN A REAL GUEST. Every `input` and `settle` below comes
 # from a transcript of a run that reached "The extraction of the selected sets ... is complete":
