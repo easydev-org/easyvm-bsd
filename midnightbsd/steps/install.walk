@@ -162,13 +162,27 @@ step "wait for the welcome pane"
 # cannot be read - and everything after it is decided by what the screen says. `Install`, the keymap's
 # `Continue with default keymap` and the hostname field all take a RETURN, and the hostname pane takes
 # a NAME first.
-step "press install, then answer whatever pane follows"
+# A RETURN IS SENT ON EVERY PASS, UNCONDITIONALLY, BECAUSE THE ONE PANE THAT NEEDS IT CANNOT BE READ.
+#
+# MEASURED four times, four stopping points, and the pattern is now clear: the welcome pane renders as
+# `MidnightBSD Installer <[pstall>` for tesseract - no `welcome`, no `install`, just the mangled button -
+# so ANY `when:` written on it never fires, and a walk that waits for a readable welcome sits there.
+#
+# A RETURN IS SAFE ON EVERY PANE THIS LOOP CAN SEE:
+#
+#	welcome   <Install> is the first button and is already selected
+#	keymap    `Continue with default keymap` is the first entry and is already selected
+#	hostname  the field is empty; a RETURN with nothing typed just re-asks
+#
+# and the one pane that needs a name first is handled before the RETURN. The loop ends on the components
+# pane, which IS readable (`Distribution Select` / `optional system components`).
+step "press install, then walk the panes"
   do
     item
       settle 10
     item
       input ret
-      settle 12
+      settle 10
 
 step "walk the panes until the components list"
   repeat
@@ -190,13 +204,9 @@ step "walk the panes until the components list"
           item
             settle 8
       item
-        when [keyboard, map]
+        when_not [hostname, for, this, machine]
         input ret
-        settle 8
-      item
-        when [keymaps, can, be, chosen]
-        input ret
-        settle 8
+        settle 6
     until
       bind at_components
       source front
