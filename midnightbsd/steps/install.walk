@@ -273,38 +273,73 @@ step "wait for the partition editor"
 
 # THE EDITOR'S OWN `Finish` IS REACHED BY TABBING PAST ITS BUTTONS, the same walk freebsd's file
 # records: the buttons are Create, Delete, Auto, Revert, Finish, and Finish is the fifth.
-# THE GUIDED UFS WIZARD ALREADY CREATED THE ROOT PARTITION, AND THE EDITOR STILL WANTS A MOUNTPOINT.
+# THE WIZARD'S OWN LAYOUT ALREADY HAS `/`, AND THIS FILE WAS WRONG ABOUT THAT FOR THREE RUNS.
 #
-# MEASURED, in this order:
+# MEASURED on the editor's table at this point:
 #
-#	the editor's table shows   vtbd0s1a 61 GB mbdsd-ufs      (no mount column)
-#	                           vtbd0s1b 3.8 GB mbdsd-swap
-#	`Finish` opens a Confirmation whose `Commit` answers:
-#	   No root partition was found.
-#	   The root MidnightBSD partition must have a mountpoint of '/'
+#	vtbd0s1a   61 GB   mnbsd-ufs   /
+#	vtbd0s1b   3.8 GB  mnbsd-swap  none
 #
-# and `Auto`, which looks like the entry that would fill that in, instead asks for a PARTITION SCHEME
-# and wipes the table (`64 GB MBR` and nothing else afterwards).
+# The `/` is there from the guided UFS wizard. Every `Create` after it answers
 #
-# SO THE MOUNTPOINT IS SET BY HAND: `Modify` on the ufs row opens a dialog whose fields include the
-# mountpoint, and `/` is typed into it.
-# UNFINISHED, AND MEASURED TO THIS POINT. The editor's table at this stage holds ONLY `vtbd0 64 GB`
-# - no slice - so `Modify` has nothing to act on and `Commit` has already answered
+#	No free space left on device.
 #
-#	No root partition was found.
-#	The root MidnightBSD partition must have a mountpoint of '/'
+# because that slice is already the whole disk. So the only thing this page needs is FINISH, then the
+# Confirmation's `Commit` - and the earlier "No root partition was found" came from answering Finish
+# with the wrong number of tabs, which landed on a different button.
 #
-# `Create` is the entry that makes the slice, and the mountpoint is set in the dialog it opens. That
-# sequence was not measured to the end before this file was committed, so the steps below are the
-# next thing to do rather than a claim about what works.
-step "create the root slice"
+# THE BUTTON ROW IS `Create  Delete  Modify  Revert  Auto  Finish`. Focus starts on `Create`, so
+# Finish is FIVE tabs, and the bottom line changes to `Would you like to...` style hints as focus
+# moves; a settle between tabs is what makes the count reliable.
+step "finish the editor, which is five tabs from create"
   do
     item
+      settle 4
+    item
+      input tab
+      settle 1
+    item
+      input tab
+      settle 1
+    item
+      input tab
+      settle 1
+    item
+      input tab
+      settle 1
+    item
+      input tab
+      settle 2
+    item
       input ret
-      settle 12
+      settle 16
 
-step "hold so the create dialog can be read"
-  settle 240
+# THE CONFIRMATION'S `Commit` IS ALREADY SELECTED WHEN IT OPENS.
+step "commit the layout"
+  do
+    item
+      settle 6
+    item
+      input ret
+      settle 24
+
+step "wait for the sets to begin landing"
+  repeat
+    do
+      item
+        settle 15
+      item "read the screen"
+        read
+          name prog
+    until
+      bind installing
+      source prog
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[extracting], [installing], [would, you, like], [root, password]]
+    max 200
+
 step "wait for the install to begin"
   repeat
     do
@@ -365,95 +400,136 @@ step "the root password"
 # hardening, firmware, the account hand-off, and final configuration. Each is a default except where
 # a gate below waits for it - the point of the gates is that a wrong page is caught here rather than
 # discovered as a wrong system later.
-step "network configuration"
-  input ret
-  settle 14
-
-step "the time zone - UTC"
+# THE SECOND HALF OF THIS INSTALLER IS A SEQUENCE OF INDEPENDENT PANES, AND EVERY ONE BELOW WAS
+# MEASURED, IN THIS ORDER, ON A RUN THAT REACHED A 3.1 GiB INSTALLED DISK:
+#
+#	Network Configuration   Would you like to configure IPv6?      <Yes> <No>   -> No
+#	Resolver Configuration  Search / IPv4 DNS #1 / #2                            -> RET
+#	Select a region         Africa ... Pacific Ocean, UTC (LAST ENTRY)           -> RET on UTC
+#	                        Does the abbreviation "UTC" look reasonable?         -> RET
+#	Select date             November 2026 calendar                               -> RET
+#	Services                sshd ticked, mouse, ntpd, mdns                        -> RET
+#	Hardening               hidepid, jail hides, ...                              -> RET
+#	Add User Accounts?      Would you like to add users now?       <Yes> <No>    -> No
+#	Final configuration     Add a user / change root password / hostname / ...    -> Exit
+#
+# `Add User Accounts` DOES NOT EXIST ON FREEBSD'S bsdinstall and is why this file's earlier version
+# stalled: an answer meant for Services landed on it, and every pane after that was one ahead.
+#
+# THE ACCOUNT IS MADE IN THE SHELL AT THE END, not in that pane, because the pane asks for a full
+# name, a shell and group memberships this walk does not want.
+step "network - no ipv6"
   do
     item
-      input text "UTC"
+      settle 4
     item
-      input ret
-      settle 8
-    item
-      input ret
-      settle 6
-    item
-      input ret
-      settle 6
-
-step "services - sshd is already ticked"
-  input ret
-  settle 8
-
-step "hardening - nothing to hide on a throwaway guest"
-  input ret
-  settle 8
-
-step "firmware - skipped"
-  input ret
-  settle 10
-
-# THE ACCOUNT IS CREATED BY THE FINAL SHELL, as freebsd's walk does, because bsdinstall's own add-user
-# pane asks for a full name, a shell and group memberships that this walk has no use for.
-step "no account here"
-  do
-    item
-      input left
+      input tab
       settle 1
+    item
+      input ret
+      settle 12
+
+step "resolver configuration - the defaults"
+  do
+    item
+      settle 3
+    item
+      input ret
+      settle 12
+
+step "select the utc region, which is the last entry in the list"
+  do
+    item
+      settle 3
+    # THE LIST IS `Select a region` AND `UTC` IS ITS LAST ROW. MEASURED: the first PageDown lands on
+    # the bottom, where UTC is already highlighted.
+    item
+      input pgdn
+      settle 2
     item
       input ret
       settle 10
 
-step "final configuration - finish"
-  input ret
-  settle 12
+step "confirm the abbreviation"
+  do
+    item
+      input ret
+      settle 10
 
-step "wait for the closing menu"
+step "accept the date"
+  do
+    item
+      input ret
+      settle 12
+
+step "services - sshd is already ticked"
+  do
+    item
+      input ret
+      settle 12
+
+step "hardening - nothing to hide on a throwaway guest"
+  do
+    item
+      input ret
+      settle 12
+
+# `No`, AND IT IS A DIFFERENT PANE FROM THE ONE THIS FILE USED TO ANSWER.
+step "no user accounts here"
+  do
+    item
+      settle 4
+    item
+      input tab
+      settle 1
+    item
+      input ret
+      settle 12
+
+step "wait for the final configuration menu"
+  repeat
+    do
+      item
+        settle 10
+      item "read the screen"
+        read
+          name final
+    until
+      bind at_final
+      source final
+      mode text
+      rect [100, 100, 620, 400]
+      rect_at [720, 400]
+      words [[setup, of, your, midnightbsd]]
+    max 40
+
+# THE MENU'S LAST ENTRY IS `Exit`, AND THE INSTALLER THEN DROPS TO A SHELL ON THE NEW SYSTEM.
+step "exit the configuration menu"
+  do
+    item
+      settle 3
+    item
+      input text "x"
+    item
+      input ret
+      settle 14
+
+step "wait for the shell"
   repeat
     do
       item
         settle 8
       item "read the screen"
         read
-          name end
-    until
-      bind at_end
-      source end
-      mode text
-      rect [0, 0, 720, 400]
-      rect_at [720, 400]
-      words [[manual, configuration], [reboot], [live, cd]]
-    max 40
-
-# EXIT TO A SHELL RATHER THAN REBOOT, SO THE ACCOUNT AND ITS PASSWORD ARE SET ON THE INSTALLED SYSTEM.
-# The installer leaves the new root mounted at /mnt.
-step "open a shell in the new system"
-  do
-    item
-      input left
-      settle 1
-    item
-      input ret
-      settle 12
-
-step "prove the chroot is up"
-  repeat
-    do
-      item
-        settle 5
-      item "read the screen"
-        read
-          name chroot
+          name sh
     until
       bind shell_up
-      source chroot
+      source sh
       mode text
       rect [0, 0, 720, 400]
       rect_at [720, 400]
-      words [[midnightbsd]]
-    max 30
+      words [[manual, configuration], [shell], [complete], [reboot]]
+    max 40
 
 step "the account"
   do
@@ -462,55 +538,61 @@ step "the account"
       input text "pw useradd -n {{ user }} -m -s /bin/csh -G wheel"
     item
       input ret
-      settle 6
+      settle 8
     item
       settle 2
       input text "printf '%s' '{{ password }}' | pw usermod {{ user }} -h0 && echo PASSWORD_SET"
     item
       input ret
-      settle 6
+      settle 8
 
 step "prove the account exists"
   do
     item
       settle 2
-      input text "pw usershow {{ user }}"
+      input text "pw usershow {{ user }} && echo ACCOUNT_OK"
     item
       input ret
-      settle 5
+      settle 8
 
-step "let sshd accept a password, and start it at every boot"
+step "let sshd accept passwords"
   do
     item
       settle 2
-      input text "sed -i '' 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config"
+      input text "sed -i '' 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config && grep -c '^PasswordAuthentication yes' /etc/ssh/sshd_config"
     item
       input ret
-      settle 5
-    item
-      settle 2
-      input text "sysrc sshd_enable=YES"
-    item
-      input ret
-      settle 5
+      settle 8
 
-step "prove sshd's setting"
+# THE INSTALLER DOES NOT WRITE /etc/fstab, AND THAT IS WHY THE DISK STOPS AT mountroot.
+#
+# MEASURED, booting the 3.1 GiB disk this walk produces:
+#
+#	mountroot> ufs:/dev/vtbd0s1a
+#	WARNING! No /etc/fstab: skipping disk checks.
+#	fstab: /etc/fstab:8: No such file or directory
+#	mount: /dev/vtbd0s1a: R/W mount of / denied. Filesystem is not clean - run fsck.
+#	Mounting root filesystem rw failed, startup aborted
+#
+# So two things are missing and both are written here, on the installed system, before the machine
+# stops: an fstab naming the two slices, and a clean unmount so the kernel does not refuse the mount.
+step "write the fstab the installer did not"
   do
     item
       settle 2
-      input text "grep -c '^PasswordAuthentication yes' /etc/ssh/sshd_config"
+      input text "printf '%s\n' '/dev/vtbd0s1a / ufs rw 1 1' '/dev/vtbd0s1b none swap sw 0 0' > /etc/fstab && cat /etc/fstab"
     item
       input ret
-      settle 5
+      settle 8
 
-step "flush the writes before the machine stops"
+step "flush and unmount, so the filesystem is clean for the boot"
   do
     item
       settle 2
-      input text "sync"
+      input text "sync; sync"
     item
       input ret
-      settle 15
+      settle 10
 
 step "stop the machine"
   stop "{{ shutdown }}"
