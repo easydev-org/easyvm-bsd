@@ -269,12 +269,14 @@ step "wait for the partitioning page"
 # vocabulary; a key is spelled `input key "down"`.
 step "auto ufs, which is one row below the default"
   do
+    # `input down` IS `key: down` - the bare form is a qcode, not text. MEASURED the other way: the
+    # error was `"key \"down\"" is not a qcode name`, so the plain spelling is the correct one.
     item
-      input key "down"
+      input down
       settle 3
     item
       input ret
-      settle 14
+      settle 16
 
 step "wait for the disk confirmation"
   repeat
