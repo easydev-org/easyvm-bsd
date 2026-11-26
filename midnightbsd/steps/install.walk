@@ -40,17 +40,47 @@ var user
 step "the media this stage boots from is already on disk"
   needs [midnightbsd.iso]
 
+# SIXTY-FOUR GIBABYTES AND THE SIMPLEST MACHINE THAT MEASURED CLEANLY. A walk with a 128 GiB disk
+# and the audio + tap devices freebsd's file carries PANICKED on this medium:
+#
+#	panic: general protection fault
+#	#5 0xffffffff80cb2827 at bdone+0x77
+#	Uptime: 2s
+#
+# which is a defect in 4.0.9's I/O path rather than a mistake in an answer. The probe that reached
+# the installer used this exact machine - q35, four vCPU, 4096 MB, one virtio disk, one ide cd - so
+# that is what this file keeps. Fewer devices is also fewer things a 2023-era kernel has to survive.
 step "create the empty disk"
   disk
     file disk.qcow2
-    size 128
+    size 64
 
 step "boot the installer"
   boot
     machine "q35,accel=kvm,vmport=off"
-    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=midnightbsd.iso,media=cdrom,readonly=on,if=none,id=media0"], ["-device", "ide-cd,drive=media0,bootindex=0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=1"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    # UEFI, BECAUSE CI'S FIRMWARE IS UEFI - and this ISO carries its own loaders for it: MEASURED by
+    # reading the disc's directory, /BOOT/BOOT1.EFI, /BOOT/LOADER.EFI and /BOOT/GPTBOOT.EFI are all
+    # there. The audio and tap devices freebsd's file carries are NOT here: the 128 GiB + full-device
+    # machine panicked this kernel ("general protection fault ... g_io_schedule_up", 2s uptime), and
+    # the machine that reached the installer was the plain one.
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "4096"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=midnightbsd.iso,media=cdrom,readonly=on,if=none,id=media0"], ["-device", "ide-cd,drive=media0,bootindex=0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=1"]]
     timeout 1800
 
+# BIOS, NOT UEFI, AND THE REASON IS MEASURED RATHER THAN PREFERRED.
+#
+# Under OVMF this release answers no keyboard at all: the machine reached
+#
+#	Common console types are:
+#	Console type [vt100]:
+#
+# and NOTHING sent over QMP moved it - `ret` from the engine, `ret` from the API, `usb-kbd`, an added
+# i8042, and a PS/2 keyboard were all tried, each on its own run. The same image under BIOS reaches
+# the installer and takes every key. Its ISO has its own UEFI loaders (/BOOT/BOOT1.EFI,
+# /BOOT/LOADER.EFI, /BOOT/GPTBOOT.EFI - MEASURED by reading the disc), so this is a driver defect in
+# 4.0.9's UEFI path and not a missing loader.
+#
+# A WALK DECIDES ITS OWN FIRMWARE - it names qemu arguments - so install and smoke both use BIOS, and
+# that is the only configuration in which this distribution is drivable at all.
 step "wait for the welcome pane"
   repeat
     do
@@ -65,18 +95,55 @@ step "wait for the welcome pane"
       mode text
       rect [0, 0, 720, 400]
       rect_at [720, 400]
-      words [[midnightbsd, installer], [welcome, to, midnightbsd]]
-    max 90
+      words [[welcome, to, midnightbsd]]
+    max 120
 
 # `<Install>` IS THE FIRST BUTTON AND IS ALREADY SELECTED.
+# THE GATE FIRING IS NOT THE PAGE BEING READY FOR A KEY, AND THIS IS WHERE THAT SHOWED.
+#
+# MEASURED: the welcome pane's words matched, the RETURN was sent, and the machine STAYED on that
+# pane - the Install button still highlighted - while the next step waited for the keymap. The pane
+# had been found; it had not finished drawing its buttons. The settle before the key and the longer
+# settle after it are what give it the moment.
 step "install, not the live cd"
-  input ret
-  settle 12
+  do
+    item
+      settle 8
+    item
+      input ret
+      settle 20
 
-# THE KEYMAP PAGE'S FIRST ENTRY IS `Continue with default keymap`.
+# THE KEYMAP PANE NEEDS ITS OWN GATE, AND THAT IS THE LESSON OF THE RUN THAT HAD NONE.
+#
+# MEASURED: with a bare `input ret` here the machine sat on this page for the rest of the run, while a
+# MANUAL ret from the API advanced it immediately to the hostname pane. The key was not lost - it was
+# sent before the pane existed. A gate is what separates "the key did not work" from "the key arrived
+# too early", and only one of those is a firmware problem.
+step "wait for the keymap pane"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name keymap
+    until
+      bind at_keymap
+      source keymap
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      # MEASURED with tesseract on this pane: the words that read back are "keyboard map" and
+      # "Other keymaps can be chosen below" - the `Keymap Selection` heading is drawn in the same
+      # light blue as the frame and the model drops it, exactly as OpenBSD's `Login:` became `togin:`.
+      words [[keyboard, map], [keymaps, can, be, chosen]]
+    max 60
+
 step "continue with the default keymap"
-  input ret
-  settle 10
+  do
+    item
+      input ret
+      settle 12
 
 step "wait for the hostname pane"
   repeat
@@ -166,9 +233,11 @@ step "wait for the disk confirmation"
       bind at_disk
       source disk
       mode text
-      rect [0, 0, 720, 400]
+      # THE DIALOG ITSELF, NOT THE WHOLE FRAME - MEASURED, whole-frame OCR on this console returns
+      # only the title bar.
+      rect [150, 100, 620, 250]
       rect_at [720, 400]
-      words [[partition], [entire, disk]]
+      words [[would, you, like], [partition]]
     max 40
 
 step "the entire disk, which is this walk's only disk"
@@ -196,35 +265,46 @@ step "wait for the partition editor"
       mode text
       rect [0, 0, 720, 400]
       rect_at [720, 400]
-      words [[partition, editor], [create], [delete]]
+      # MEASURED on this pane: it prints "Please review the disk setup. When complete, press the Finish
+      # button." above a table of `vtbd0s1a 61 GB mbdsd-ufs` and `vtbd0s1b 3.8 GB mbdsd-swap`, so the
+      # words to gate on are these - not the Create/Delete labels a FreeBSD editor shows.
+      words [[disk, setup], [finish]]
     max 40
 
 # THE EDITOR'S OWN `Finish` IS REACHED BY TABBING PAST ITS BUTTONS, the same walk freebsd's file
 # records: the buttons are Create, Delete, Auto, Revert, Finish, and Finish is the fifth.
-step "finish the partition editor"
+# THE GUIDED UFS WIZARD ALREADY CREATED THE ROOT PARTITION, AND THE EDITOR STILL WANTS A MOUNTPOINT.
+#
+# MEASURED, in this order:
+#
+#	the editor's table shows   vtbd0s1a 61 GB mbdsd-ufs      (no mount column)
+#	                           vtbd0s1b 3.8 GB mbdsd-swap
+#	`Finish` opens a Confirmation whose `Commit` answers:
+#	   No root partition was found.
+#	   The root MidnightBSD partition must have a mountpoint of '/'
+#
+# and `Auto`, which looks like the entry that would fill that in, instead asks for a PARTITION SCHEME
+# and wipes the table (`64 GB MBR` and nothing else afterwards).
+#
+# SO THE MOUNTPOINT IS SET BY HAND: `Modify` on the ufs row opens a dialog whose fields include the
+# mountpoint, and `/` is typed into it.
+# UNFINISHED, AND MEASURED TO THIS POINT. The editor's table at this stage holds ONLY `vtbd0 64 GB`
+# - no slice - so `Modify` has nothing to act on and `Commit` has already answered
+#
+#	No root partition was found.
+#	The root MidnightBSD partition must have a mountpoint of '/'
+#
+# `Create` is the entry that makes the slice, and the mountpoint is set in the dialog it opens. That
+# sequence was not measured to the end before this file was committed, so the steps below are the
+# next thing to do rather than a claim about what works.
+step "create the root slice"
   do
     item
-      input tab
-      settle 1
-    item
-      input tab
-      settle 1
-    item
-      input tab
-      settle 1
-    item
-      input tab
-      settle 1
-    item
       input ret
-      settle 14
+      settle 12
 
-step "commit the layout"
-  do
-    item
-      input ret
-      settle 16
-
+step "hold so the create dialog can be read"
+  settle 240
 step "wait for the install to begin"
   repeat
     do
