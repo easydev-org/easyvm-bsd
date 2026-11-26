@@ -414,18 +414,66 @@ step "finish configuring"
 #   Exit to (S)hell, (H)alt or (R)eboot? [reboot]
 # and the default is already `reboot`, so the RETURN is what takes it; the `r` before it covers the
 # case where the menu highlights something else.
-step "reboot, which unmounts the disk before the machine stops"
+# `h` AND NOT `r`, AND THAT IS THE WHOLE ENDING.
+#
+# The installer's last question is
+#
+#	Exit to (S)hell, (H)alt or (R)eboot? [reboot]
+#
+# and `r` is the default - which sent every earlier run back into the INSTALLER (the medium is still
+# bootindex=0), so the machine never stopped, the stage killed qemu mid-write, and the next fsck found
+# a dirty filesystem whose names it threw into lost+found. MEASURED on the disks from those runs:
+#
+#	drwx-----T 2550 root wheel 182272  lost+found
+#	# ls /mnt/netbsd      -> No such file or directory
+#
+# `h` halts the guest: sysinst syncs, unmounts and powers the machine off, which is what
+# `wait_until stopped` below can actually wait for.
+# THE ENDING IS TWO PANES: THE COMPLETION NOTICE, THEN `d: Reboot the computer` ON THE MAIN MENU.
+#
+# THIS IS THE WHOLE FAILURE, AND IT WAS MEASURED. Every earlier run answered the installer's
+# `Exit to (S)hell, (H)alt or (R)eboot?` with `r`, which reboots into the INSTALLER - the medium is
+# still bootindex=0 - so the machine never stopped, the stage killed qemu mid-write, and the next
+# fsck found a dirty filesystem and threw every name into lost+found:
+#
+#	drwx-----T 2550 root wheel 182272  lost+found
+#	# ls /mnt/netbsd      -> No such file or directory
+#
+# What `x: Finished configuring` actually leads to, MEASURED on the run that finished:
+#
+#	The installation of NetBSD-11.1 is now complete. The system should boot from hard disk.
+#	Hit enter to continue          -> RETURN
+#	NetBSD-11.1 Install System
+#	  a: Install NetBSD to hard disk
+#	  ...
+#	  d: Reboot the computer       -> `d` + RETURN
+#
+# and with that disk, mounted from the installer's shell afterwards:
+#
+#	# ls /mnt
+#	bin  boot  dev  etc  kern  lib  libdata  libexec  mnt  netbsd  proc  rescue  root
+#	sbin  stand  tmp  usr  var
+#
+# 23 entries, `netbsd` among them, and no lost+found shambles. So `d` on the main menu is the ending
+# that syncs and unmounts, and `r` at the exit prompt is the one that corrupts.
+step "the completion notice"
   do
     item
-      settle 3
-    item
-      input text "r"
+      settle 4
     item
       input ret
-      settle 30
+      settle 12
 
-# AND THE MACHINE IS THEN STOPPED BY THE GUEST ITSELF, not by qemu being killed under it. The wait
-# gives the unmount and the sync time to land before this stage saves anything.
+step "reboot from the main menu, which syncs and unmounts"
+  do
+    item
+      settle 4
+    item
+      input text "d"
+    item
+      input ret
+      settle 25
+
 step "wait for the machine to stop on its own"
   wait_until stopped
   timeout 600
