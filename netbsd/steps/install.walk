@@ -362,8 +362,20 @@ step "finish configuring"
 # disk as 2,550 ORPHANED INODES and their directory tree was never created: the extractor wrote the
 # files into a root that had no `bin/` for them to live in.
 #
-# THAT IS A DEFECT IN sysinst AS IT RUNS HERE, and the reboot does not fix it. What the reboot DOES
-# fix, and why it stays, is the clean unmount - a disk a later stage can fsck without losing names.
+
+# AND NETBSD 10.2 FAILS THE SAME WAY, SO THIS IS NOT AN 11.1 BUG. MEASURED with the identical walk and
+# only the medium swapped (NetBSD-10.2-amd64.iso, sha512 852a43c4... verified):
+#
+#	ls -la /mnt
+#	drwx-----T 2531 root wheel 182272  lost+found
+#	-r--r--r--   1 root wheel  86284  boot
+#	drwxr-xr-x   2 root wheel   2048  etc
+#	drwxr-xr-x   2 root wheel    512  kern
+#	ls /mnt/netbsd -> No such file or directory
+#
+# 2,531 lost+found entries, the same eight directories, no /netbsd. So the extractor behaves the same
+# on both releases and the version is not the variable. Nothing in this walk can change it: every pane
+# was answered as measured, the sets' bytes reach the disk, and the tree they need is never made.
 #
 # SO THE ENDING IS THE INSTALLER'S OWN REBOOT, WHICH UNMOUNTS. `r` is the third character of
 #   Exit to (S)hell, (H)alt or (R)eboot? [reboot]
