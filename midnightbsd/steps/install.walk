@@ -718,85 +718,39 @@ step "wait for the final configuration menu"
     max 40
 
 # THE MENU'S LAST ENTRY IS `Exit`, AND THE INSTALLER THEN DROPS TO A SHELL ON THE NEW SYSTEM.
-step "exit the configuration menu"
+# THE MENU'S `x` OPENS A YES/NO ABOUT A SHELL, AND THIS WALK WANTS THE SHELL.
+#
+# MEASURED: `x` on the configuration menu asks `The installation is now finished. Before exiting the
+# installer, would you like to open a shell in the new system?` with `<Yes>` first. A gate that waits
+# for the chroot banner never closes, because the banner only appears after that question is answered.
+step "exit the configuration menu, and take its shell"
   do
     item
-      settle 3
+      settle 4
     item
       input text "x"
     item
       input ret
-      settle 14
-
-step "wait for the shell"
-  repeat
-    do
-      item
-        settle 8
-      item "read the screen"
-        read
-          name sh
-    until
-      bind shell_up
-      source sh
-      mode text
-      rect [0, 0, 720, 400]
-      rect_at [720, 400]
-      words [[manual, configuration], [shell], [complete], [reboot]]
-    max 40
-
-step "the account"
-  do
-    item
-      settle 2
-      input text "pw useradd -n {{ user }} -m -s /bin/csh -G wheel"
+      settle 10
+    # `<Yes>` IS THE FIRST BUTTON ON THE MANUAL CONFIGURATION QUESTION, AND ONE RETURN TAKES IT.
+    # MEASURED: a second RETURN here answers the shell's own `exit` and the chroot closes before the
+    # repair steps can type into it - which is how the run that reached `Complete` skipped them.
     item
       input ret
-      settle 8
-    item
-      settle 2
-      input text "printf '%s' '{{ password }}' | pw usermod {{ user }} -h0 && echo PASSWORD_SET"
-    item
-      input ret
-      settle 8
+      settle 20
 
-step "prove the account exists"
-  do
-    item
-      settle 2
-      input text "pw usershow {{ user }} && echo ACCOUNT_OK"
-    item
-      input ret
-      settle 8
+# NO GATE HERE, AND THAT IS THE FIX FOR THREE RUNS THAT DIED ON ONE.
+#
+# MEASURED: the chroot banner is `This shell is operating in a chroot in the new system.` and this
+# console's OCR returns it as two stray letters on some frames. Gates on `chroot`, `shell` and
+# `manual configuration` were all tried; the banner is simply not reliably readable, while the shell
+# itself always arrives 15-20 seconds after the `<Yes>` button.
+#
+# So the wait is a settle and the next step types into the shell. A command that arrives a second
+# early lands on an empty prompt and is harmless; there is nothing to mis-answer.
+step "let the chroot shell come up"
+  settle 25
 
-step "let sshd accept passwords"
-  do
-    item
-      settle 2
-      input text "sed -i '' 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config && grep -c '^PasswordAuthentication yes' /etc/ssh/sshd_config"
-    item
-      input ret
-      settle 8
-
-# THE INSTALLER DOES WRITE /etc/fstab, AND THE DISK WAS NOT STARTING FOR A DIFFERENT REASON.
-#
-# MEASURED in the chroot the installer offers at the end of a complete run:
-#
-#	# cat /etc/fstab
-#	# Device      Mountpoint  FStype  Options  Dump  Pass#
-#	/dev/vtbd0s1a  /          ufs     rw       1     1
-#	/dev/vtbd0s1b  none       swap    sw       0     0
-#
-# There is no file to write. What was wrong was the ENDING: an earlier version killed the machine
-# straight after the shell, so the boot then answered
-#
-#	mount: /dev/vtbd0s1a: R/W mount of / denied. Filesystem is not clean - run fsck
-#
-# The answer is the installer's own ending: `Exit` the shell, take `Reboot` on the Complete pane, and
-# let it unmount. MEASURED: after that sequence the disk boots to its FirstBoot wizard.
-#
-# The account is still made here, because the installer's own Add User pane asks for a full name and
-# group memberships this walk does not want.
 step "the account, in the chroot the installer opens"
   do
     item
