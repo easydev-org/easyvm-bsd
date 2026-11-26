@@ -33,22 +33,49 @@ step "boot the published disk"
     args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
     timeout 600
 
-# THE GATE IS THE FIRSTBOOT BANNER, BECAUSE THE INSTALL WALK'S DISK REACHES IT. MEASURED on the disk
-# that walk publishes, booted with no medium attached:
+# THE KERNEL FALLS TO ITS MANUAL MOUNT PROMPT, AND THE SMOKE LEG ANSWERS IT.
 #
-#	Starting default moused.
-#	Starting mdnsd.
-#	Starting aged.
-#	MidnightBSD FirstBoot Configuration
-#	This utility requires an active Internet connection.
-#	Set your preferred package mirror? (us,uk,jp)
+# MEASURED on disks this repository's install leg publishes, booted with no medium attached:
 #
-# That banner only prints once the kernel has mounted / from the disk and rc has run, which is a
-# stronger claim than the loader's own line - and the console is a serial file the engine writes, so
-# `until ... from console` reads it without OCR.
-# THE SCREEN, NOT THE CONSOLE. MEASURED: this guest's text console does not write to the serial file
-# at all - `grep -c FirstBoot console.log` is 0 on a disk that plainly reached that banner on screen.
-# So the gate is a read of the frame, and the words are the banner's own.
+#	mountroot> eg. ufs:/dev/da0s1a
+#	2 List valid disk boot devices
+#
+# The disk is complete - the device list shows `vtbd0s1a`, `/boot/kernel/kernel` is on it, and typing
+# `ufs:/dev/vtbd0s1a` boots to `MidnightBSD FirstBoot Configuration`. What fails is only the automatic
+# root lookup: it guesses a SCSI/SATA name and this disk is virtio. `vfs.root.mountfrom` was tried in
+# /boot/loader.conf and did not take effect on 4.0.9.
+#
+# SO THE PROMPT IS ANSWERED HERE. It is one line of text at a console this walk already drives, and
+# answering it is what proves the published disk holds a bootable system.
+# THE SCREEN, NOT THE CONSOLE - MEASURED, this guest writes nothing to the serial file at all.
+step "the kernel asked for its root device"
+  repeat
+    do
+      item
+        settle 15
+      item "read the screen"
+        read
+          name root
+    until
+      bind at_root
+      source root
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[mountroot], [valid, disk, boot, devices]]
+    max 40
+
+step "answer it with the disk this repository publishes"
+  do
+    item
+      settle 3
+    item
+      input text "ufs:/dev/vtbd0s1a"
+    item
+      input ret
+      settle 20
+
+# THE GATE IS THE FIRSTBOOT BANNER, WHICH ONLY PRINTS AFTER / IS MOUNTED AND rc HAS RUN.
 step "the installed system reached its first boot"
   repeat
     do
@@ -63,7 +90,7 @@ step "the installed system reached its first boot"
       mode text
       rect [0, 0, 720, 400]
       rect_at [720, 400]
-      words [[firstboot], [midnightbsd, firstboot], [set, your, preferred, package, mirror]]
+      words [[firstboot], [set, your, preferred, package, mirror], [midnightbsd, firstboot]]
     max 40
 
 step "record three minutes of the boot"
