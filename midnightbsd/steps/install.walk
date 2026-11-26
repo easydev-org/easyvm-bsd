@@ -184,6 +184,16 @@ step "press install, then walk the panes"
       input ret
       settle 10
 
+# EACH PANE IS NAMED BEFORE ITS KEY IS SENT, SO A RETURN CANNOT RUN PAST THE COMPONENTS LIST.
+#
+# MEASURED on the run whose screen showed `ZFS Configuration / stripe: Not enough disks selected`:
+# an unconditional RETURN per pass had walked the installer THROUGH the components list, the
+# partitioning menu and the ZFS page, because nothing stopped it - the `until:` is tested after the
+# `do:` block has already sent its key.
+#
+# So each pass names the pane it is looking at, and only the panes that want a RETURN get one. The
+# welcome pane's own words are unreadable, so `Install` - the only word that page renders, as
+# `[pstall` - stands in for it, and the button is already selected.
 step "walk the panes until the components list"
   repeat
     do
@@ -204,9 +214,17 @@ step "walk the panes until the components list"
           item
             settle 8
       item
-        when_not [hostname, for, this, machine]
+        when [keyboard, map]
         input ret
-        settle 6
+        settle 8
+      item
+        when [pstall]
+        input ret
+        settle 8
+      item
+        when [welcome, to, midnightbsd]
+        input ret
+        settle 8
     until
       bind at_components
       source front
@@ -216,25 +234,6 @@ step "walk the panes until the components list"
       words [[distribution, select], [optional, system, components]]
     max 40
 
-step "wait for the component list"
-  repeat
-    do
-      item
-        settle 8
-      item "read the screen"
-        read
-          name components
-    until
-      bind at_components
-      source components
-      mode text
-      rect [0, 0, 720, 400]
-      rect_at [720, 400]
-      words [[distribution, select], [optional, system, components]]
-    max 40
-
-# kernel-dbg, lib32 AND mports ARRIVE TICKED AND ARE LEFT ALONE. `mports` is MidnightBSD's package
-# tree, and it is what `ssh.walk` installs Xfce from.
 step "keep the default components"
   input ret
   settle 12
@@ -258,11 +257,21 @@ step "wait for the partitioning page"
 
 # UFS AND NOT THE DEFAULT ZFS. See the header: one DOWN, then RETURN. MEASURED, the page's own labels
 # are `Auto (ZFS)` on the selected row and `Auto (UFS)` beneath it.
+# `input key "down"` AND NOT `input down`, BECAUSE THE LATTER IS READ AS TEXT.
+#
+# MEASURED on the run that finally showed the page: with `input down` the partitioning menu stayed on
+# `Auto (ZFS)` - the default - and the install went down the ZFS path, where the next page answered
+#
+#	ZFS Configuration
+#	stripe: Not enough disks selected. (0 < 1 minimum)
+#
+# and every later key landed on a modal about that. `down` written bare is a TEXT string in this
+# vocabulary; a key is spelled `input key "down"`.
 step "auto ufs, which is one row below the default"
   do
     item
-      input down
-      settle 2
+      input key "down"
+      settle 3
     item
       input ret
       settle 14
