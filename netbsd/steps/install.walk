@@ -318,9 +318,28 @@ step "the timezone menu"
       input ret
       settle 14
 
+# `x` QUITS THE TIMEZONE LIST, AND A RETURN ALONE DOES NOT.
+#
+# MEASURED on the run that stalled here: the pane read
+#
+#	Please choose the timezone that fits you best from the list below
+#	Press RETURN to select an entry.
+#	Press 'x' followed by RETURN to quit the timezone selection.
+#	Default: UTC      Selected: UTC
+#
+# so the entry was already chosen and the LIST was waiting to be left. A RETURN picks an entry; leaving
+# the list is `x` and then RETURN, which is what the pane's own help says.
 step "utc, the first entry"
   input ret
-  settle 16
+  settle 12
+
+step "leave the timezone list"
+  do
+    item
+      input text "x"
+    item
+      input ret
+      settle 16
 
 # `Configure network` IS NOT TOUCHED: MEASURED, it terminates sysinst at its netmask prompt. See the
 # header. Everything the disk needs is already written at this point.
