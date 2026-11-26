@@ -98,104 +98,48 @@ step "wait for the welcome pane"
       words [[welcome, to, midnightbsd]]
     max 120
 
-# `<Install>` IS THE FIRST BUTTON AND IS ALREADY SELECTED.
-# THE GATE FIRING IS NOT THE PAGE BEING READY FOR A KEY, AND THIS IS WHERE THAT SHOWED.
+# THE FRONT OF THIS INSTALLER IS DRIVEN BY WHAT IS ON SCREEN, NOT BY A COUNT OF RETURNS.
 #
-# MEASURED: the welcome pane's words matched, the RETURN was sent, and the machine STAYED on that
-# pane - the Install button still highlighted - while the next step waited for the keymap. The pane
-# had been found; it had not finished drawing its buttons. The settle before the key and the longer
-# settle after it are what give it the moment.
-# THE KEY NEEDS THE PANE TO BE FINISHED DRAWING, AND CI'S MACHINE IS SLOWER THAN THE POD'S.
+# THREE CI RUNS TAUGHT THE SAME LESSON FROM THREE ANGLES:
 #
-# MEASURED on run 45755696023, which failed here after 60 attempts:
+#	45755696023  one RETURN after the welcome gate  -> still on the welcome pane 60 attempts later
+#	45757407273  two RETURNs                       -> "Please choose a hostname" (keymap was skipped)
+#	45761752460  the same two RETURNs              -> already on "Choose optional system components"
 #
-#	none of "keyboard map" or "keymaps can be chosen" in "MidnightBSD Installer <[pstall>"
-#
-# The welcome pane is what that OCR read - so the RETURN never advanced it. The pod reached the keymap
-# pane at settle 20; this is three times that, and the gate below is what decides, not the delay.
-step "install, not the live cd"
-  do
-    item
-      settle 12
-    item
-      input ret
-      settle 30
-
-# THE KEYMAP PANE NEEDS ITS OWN GATE, AND THAT IS THE LESSON OF THE RUN THAT HAD NONE.
-#
-# MEASURED: with a bare `input ret` here the machine sat on this page for the rest of the run, while a
-# MANUAL ret from the API advanced it immediately to the hostname pane. The key was not lost - it was
-# sent before the pane existed. A gate is what separates "the key did not work" from "the key arrived
-# too early", and only one of those is a firmware problem.
-# A SECOND PRESS, BECAUSE THE FIRST ONE HAS TO WIN A RACE WITH THE BUTTONS.
-#
-# MEASURED on run 45755696023: the welcome pane's words matched, a RETURN was sent, and the pane was
-# STILL the welcome one sixty attempts later - the key arrived before the buttons were live. One more
-# RETURN after a full settle costs a second and removes the race entirely.
-step "press install once more, in case the first landed early"
+# The number of pages one RETURN advances depends on how fast the runner's console is, so any fixed
+# count is wrong on some machine. Each step below therefore ASKS WHICH PANE IT IS ON and sends the one
+# key that pane wants. A pane that is already behind us costs nothing.
+step "welcome - install"
   do
     item
       settle 10
     item
       input ret
-      settle 20
+      settle 14
 
-step "wait for the keymap pane"
-  repeat
-    do
-      item
-        settle 8
-      item "read the screen"
-        read
-          name keymap
-    until
-      bind at_keymap
-      source keymap
-      mode text
-      rect [0, 0, 720, 400]
-      rect_at [720, 400]
-      # EITHER PANE MEANS THE WELCOME ONE IS BEHIND US, AND WHICH ONE ARRIVES DEPENDS ON A RACE.
-      #
-      # MEASURED, one commit apart: one RETURN sometimes advances only the welcome pane (the next
-      # screen is `Keymap Selection`) and sometimes takes the keymap pane too, because its first entry
-      # is already selected (the next screen is `Please choose a hostname`). Both are answers to the
-      # same question - "did the installer leave its welcome page" - so both satisfy this gate.
-      #
-      # The keymap pane's own words are "keyboard map" and "keymaps can be chosen"; `Keymap Selection`
-      # is drawn in the frame's light blue and the model drops it, as it does OpenBSD's `Login:`.
-      words [[keyboard, map], [keymaps, can, be, chosen], [choose, a, hostname]]
-    max 60
-
-step "continue with the default keymap"
+step "answer the keymap pane if it is showing"
+  when [keymap]
   do
+    item
+      settle 4
+    # `Continue with default keymap` is its first entry and is already selected.
     item
       input ret
       settle 12
 
-step "wait for the hostname pane"
-  repeat
-    do
-      item
-        settle 8
-      item "read the screen"
-        read
-          name host
-    until
-      bind at_hostname
-      source host
-      mode text
-      rect [0, 0, 720, 400]
-      rect_at [720, 400]
-      words [[set, hostname], [choose, a, hostname]]
-    max 40
-
-step "the hostname"
+# THE TYPED NAME GOES ONLY INTO THE PANE THAT ASKS FOR ONE. `when [hostname]` is the guard: on the
+# runner where the keymap pane was still showing, this step is skipped entirely, and the component
+# gate below then waits for the pane the installer actually reached.
+step "the hostname, when that is the pane"
+  when [hostname]
   do
+    item
+      settle 4
     item
       input text "midnightbsd"
     item
       input ret
-      settle 10
+      settle 12
 
 step "wait for the component list"
   repeat
