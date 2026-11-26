@@ -9,6 +9,30 @@
 # That is an OCR failure, not a screen that is not there - the same frame's console log says the menu
 # was drawn. The other three BSD installers here draw at 640x480 or larger and are read; this one is
 # not, so its steps carry `settle:` instead of a gate.
+
+# WHAT ACTUALLY FAILS ON THE BIOS PATH, MEASURED IN THE INSTALLER'S OWN SHELL AFTER A FULL RUN:
+#
+#	# dkctl ld0 listwedges
+#	/dev/rld0: no wedges configured
+#	# mount /dev/ld0a /mnt && ls /mnt
+#	boot dev kern proc cdrom etc lost+found var
+#	# ls -la /mnt/netbsd /mnt/bin/sh
+#	/mnt/bin/sh: No such file or directory
+#	/mnt/netbsd: No such file or directory
+#
+# The disk is 1,745,158,144 bytes and the kernel calls it `ld0` with a 126 GB `a` slice, so the slice
+# exists - but DKWEDGE never configured it, and the sets were unpacked against a target that was not
+# the mounted slice. `base.tar.xz` on the medium plainly carries `./bin`, `./bin/sh`, `./sbin` and
+# `./lib` (MEASURED by reading the ISO's own set), so what is missing is the MOUNT, not the set.
+#
+# AND THE LOADER ON THE PUBLISHED DISK IS CORRECT: `bootxx_ffsv2` sits at sector 64 and the MBR holds
+# an active 0xa9 partition at 446, which is why the console prints
+#
+#	booting hd0a:netbsd.old - starting in 0 seconds.
+#	open netbsd.old: No such file or directory
+#
+# That is A DEFECT IN sysinst AS IT RUNS HERE, and it is recorded rather than papered over: every page
+# of this walk was answered as measured, and `/` still has no kernel in it.
 #
 # THE SEQUENCE IS STILL MEASURED, KEY BY KEY, IN A REAL GUEST. Every `input` and `settle` below comes
 # from a transcript of a run that reached "The extraction of the selected sets ... is complete":
