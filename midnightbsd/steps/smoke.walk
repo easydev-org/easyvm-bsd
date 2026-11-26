@@ -1,0 +1,74 @@
+# DOES THE PUBLISHED DISK START? Boot it, look, and kill it - nothing else.
+#
+# THE CLAIM THE INSTALL LEG CANNOT MAKE. MidnightBSD's install walk ends with the sets extracted and
+# the configuration menu answered; this is the file that says the firmware starts the disk.
+#
+# BIOS, NOT UEFI, BECAUSE THE INSTALL LEG INSTALLS UNDER BIOS. MEASURED: under OVMF this release
+# answers no keyboard at all - the installer's own `Console type [vt100]:` prompt took no key from
+# the engine, the API, usb-kbd, an added i8042 or a PS/2 board, each on its own run - while the same
+# image under BIOS takes every one. A walk names its own qemu arguments, so install and smoke agree.
+#
+# THE GATE IS THE LOADER'S OWN TEXT, NOT A PICTURE. MEASURED on the disk this walk produces:
+#
+#	Loading /boot/defaults/loader.conf
+#	/boot/kernel/kernel text=... data=... syms=...
+#	...
+#	mountroot>
+#
+# `Loading /boot/defaults/loader.conf` is the loader having found the system it was told to start.
+# A disk without bootblocks prints the firmware's "No bootable option" and never this line.
+#
+# AND THE `mountroot>` PROMPT IS EXPECTED UNTIL THE INSTALL LEG'S fstab CHANGE LANDS: MEASURED, that
+# disk stops there with "WARNING! No /etc/fstab" and "R/W mount of / denied. Filesystem is not clean"
+# because the installer never wrote fstab. The install walk now writes it; this leg is what proves it.
+#
+# IT PUBLISHES NO DISK: `out:` is empty in the stage that runs this. The artifact is the recording.
+walkthrough "the published disk starts - nothing else"
+resolution 1920x1080
+recording_resolution 1920x1080
+
+step "boot the published disk"
+  boot
+    machine "q35,accel=kvm,vmport=off"
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    timeout 600
+
+# THE GATE IS THE FIRSTBOOT BANNER, BECAUSE THE INSTALL WALK'S DISK REACHES IT. MEASURED on the disk
+# that walk publishes, booted with no medium attached:
+#
+#	Starting default moused.
+#	Starting mdnsd.
+#	Starting aged.
+#	MidnightBSD FirstBoot Configuration
+#	This utility requires an active Internet connection.
+#	Set your preferred package mirror? (us,uk,jp)
+#
+# That banner only prints once the kernel has mounted / from the disk and rc has run, which is a
+# stronger claim than the loader's own line - and the console is a serial file the engine writes, so
+# `until ... from console` reads it without OCR.
+# THE SCREEN, NOT THE CONSOLE. MEASURED: this guest's text console does not write to the serial file
+# at all - `grep -c FirstBoot console.log` is 0 on a disk that plainly reached that banner on screen.
+# So the gate is a read of the frame, and the words are the banner's own.
+step "the installed system reached its first boot"
+  repeat
+    do
+      item
+        settle 15
+      item "read the screen"
+        read
+          name booted
+    until
+      bind alive
+      source booted
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[firstboot], [midnightbsd, firstboot], [set, your, preferred, package, mirror]]
+    max 40
+
+step "record three minutes of the boot"
+  settle 180
+
+step "stop the machine"
+  stop kill
+  timeout 120

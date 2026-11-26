@@ -273,28 +273,25 @@ step "wait for the partition editor"
 
 # THE EDITOR'S OWN `Finish` IS REACHED BY TABBING PAST ITS BUTTONS, the same walk freebsd's file
 # records: the buttons are Create, Delete, Auto, Revert, Finish, and Finish is the fifth.
-# THE WIZARD'S OWN LAYOUT ALREADY HAS `/`, AND THIS FILE WAS WRONG ABOUT THAT FOR THREE RUNS.
+# THE WIZARD'S OWN LAYOUT ALREADY HAS `/`, AND THIS FILE KEPT TRYING TO ADD A SECOND SLICE.
 #
-# MEASURED on the editor's table at this point:
+# MEASURED on the editor's table:
 #
 #	vtbd0s1a   61 GB   mnbsd-ufs   /
 #	vtbd0s1b   3.8 GB  mnbsd-swap  none
 #
-# The `/` is there from the guided UFS wizard. Every `Create` after it answers
+# The `/` came from the guided UFS wizard. Every `Create` after it answers "No free space left on
+# device", which is how that mistake announced itself.
 #
-#	No free space left on device.
+# THE BUTTON ROW IS `Create Delete Modify Revert Auto Finish` AND FOCUS STARTS ON `Create`.
 #
-# because that slice is already the whole disk. So the only thing this page needs is FINISH, then the
-# Confirmation's `Commit` - and the earlier "No root partition was found" came from answering Finish
-# with the wrong number of tabs, which landed on a different button.
-#
-# THE BUTTON ROW IS `Create  Delete  Modify  Revert  Auto  Finish`. Focus starts on `Create`, so
-# Finish is FIVE tabs, and the bottom line changes to `Would you like to...` style hints as focus
-# moves; a settle between tabs is what makes the count reliable.
-step "finish the editor, which is five tabs from create"
+# Five tabs reach `Finish` - and MEASURED, five tabs then RETURN did NOT open the Confirmation: the
+# editor redrew with the table intact and the bottom line unchanged. The row is a dlg(3) menubar and
+# focus wraps, so this step walks forward one tab at a time and takes any pane that appears.
+step "finish the partition editor"
   do
     item
-      settle 4
+      settle 3
     item
       input tab
       settle 1
@@ -309,16 +306,42 @@ step "finish the editor, which is five tabs from create"
       settle 1
     item
       input tab
-      settle 2
+      settle 1
     item
       input ret
-      settle 16
+      settle 6
 
-# THE CONFIRMATION'S `Commit` IS ALREADY SELECTED WHEN IT OPENS.
-step "commit the layout"
+# THE FIRST RETURN MAY HAVE LANDED ON A DIFFERENT BUTTON, SO THIS IS THE SECOND ATTEMPT AT THE SAME
+# QUESTION: whatever the editor did, one more RETURN either opens the Confirmation or finishes.
+step "press finish again"
   do
     item
-      settle 6
+      input ret
+      settle 10
+
+step "wait for the commit confirmation"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name conf
+    until
+      bind at_conf
+      source conf
+      mode text
+      # THE WHOLE FRAME, NOT A CROP. MEASURED: this pane's two sentences OCR cleanly in a full-frame
+      # read ("PERMANENTLY ERASED. Are you sure you want to" and "commit your changes?") and a
+      # [150,100,620,250] crop of the same frame misses them, because the Confirmation sits lower
+      # than the editor's own dialog box.
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[permanently, erased], [commit, your, changes]]
+    max 20
+
+step "commit the layout"
+  do
     item
       input ret
       settle 24
@@ -337,7 +360,7 @@ step "wait for the sets to begin landing"
       mode text
       rect [0, 0, 720, 400]
       rect_at [720, 400]
-      words [[extracting], [installing], [would, you, like], [root, password]]
+      words [[extracting], [installing], [overall, progress], [root, password]]
     max 200
 
 step "wait for the install to begin"
@@ -564,35 +587,93 @@ step "let sshd accept passwords"
       input ret
       settle 8
 
-# THE INSTALLER DOES NOT WRITE /etc/fstab, AND THAT IS WHY THE DISK STOPS AT mountroot.
+# THE INSTALLER DOES WRITE /etc/fstab, AND THE DISK WAS NOT STARTING FOR A DIFFERENT REASON.
 #
-# MEASURED, booting the 3.1 GiB disk this walk produces:
+# MEASURED in the chroot the installer offers at the end of a complete run:
 #
-#	mountroot> ufs:/dev/vtbd0s1a
-#	WARNING! No /etc/fstab: skipping disk checks.
-#	fstab: /etc/fstab:8: No such file or directory
-#	mount: /dev/vtbd0s1a: R/W mount of / denied. Filesystem is not clean - run fsck.
-#	Mounting root filesystem rw failed, startup aborted
+#	# cat /etc/fstab
+#	# Device      Mountpoint  FStype  Options  Dump  Pass#
+#	/dev/vtbd0s1a  /          ufs     rw       1     1
+#	/dev/vtbd0s1b  none       swap    sw       0     0
 #
-# So two things are missing and both are written here, on the installed system, before the machine
-# stops: an fstab naming the two slices, and a clean unmount so the kernel does not refuse the mount.
-step "write the fstab the installer did not"
+# There is no file to write. What was wrong was the ENDING: an earlier version killed the machine
+# straight after the shell, so the boot then answered
+#
+#	mount: /dev/vtbd0s1a: R/W mount of / denied. Filesystem is not clean - run fsck
+#
+# The answer is the installer's own ending: `Exit` the shell, take `Reboot` on the Complete pane, and
+# let it unmount. MEASURED: after that sequence the disk boots to its FirstBoot wizard.
+#
+# The account is still made here, because the installer's own Add User pane asks for a full name and
+# group memberships this walk does not want.
+step "the account, in the chroot the installer opens"
   do
     item
       settle 2
-      input text "printf '%s\n' '/dev/vtbd0s1a / ufs rw 1 1' '/dev/vtbd0s1b none swap sw 0 0' > /etc/fstab && cat /etc/fstab"
+      input text "pw useradd -n {{ user }} -m -s /bin/csh -G wheel && echo USER_OK"
+    item
+      input ret
+      settle 8
+    item
+      settle 2
+      input text "printf '%s' '{{ password }}' | pw usermod {{ user }} -h0 && echo PASSWORD_SET"
     item
       input ret
       settle 8
 
-step "flush and unmount, so the filesystem is clean for the boot"
+step "prove the account and the fstab the installer wrote"
   do
     item
       settle 2
-      input text "sync; sync"
+      input text "pw usershow {{ user }} | cut -d: -f1,7 && cat /etc/fstab && echo FSTAB_OK"
     item
       input ret
-      settle 10
+      settle 8
+
+step "let sshd accept a password"
+  do
+    item
+      settle 2
+      input text "sed -i '' 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config; grep -c '^PasswordAuthentication yes' /etc/ssh/sshd_config"
+    item
+      input ret
+      settle 8
+
+# THE UNMOUNT IS THE POINT, SO THIS IS NOT A KILL.
+step "flush and leave the shell, so the installer unmounts"
+  do
+    item
+      settle 2
+      input text "sync; sync; exit"
+    item
+      input ret
+      settle 20
+
+step "wait for the complete pane"
+  repeat
+    do
+      item
+        settle 10
+      item "read the screen"
+        read
+          name done
+    until
+      bind at_done
+      source done
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[installation, of, midnightbsd, complete], [reboot, into, the, installed]]
+    max 40
+
+# `Reboot` IS THE FIRST BUTTON AND IT UNMOUNTS BEFORE RESTARTING.
+step "reboot into the installed system, which unmounts first"
+  do
+    item
+      settle 4
+    item
+      input ret
+      settle 40
 
 step "stop the machine"
   stop "{{ shutdown }}"

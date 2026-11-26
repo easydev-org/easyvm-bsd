@@ -1,0 +1,57 @@
+name: netbsd-smoke
+
+# DOES THE PUBLISHED DISK START? Boot it under BIOS, wait for the loader's own line, record three
+# minutes, kill it.
+#
+# BIOS AND NOT UEFI, because the install leg writes MBR + BIOS bootblocks. MEASURED on the disk the
+# UEFI path published: "BdsDxe: No bootable option or device was found." A walk names its own qemu
+# arguments, so this leg boots the way the install leg installed.
+#
+# THE GATE IS `booting hd0a:` ON THE CONSOLE - bootxx having read the disklabel and started the ffs.
+# MEASURED on a disk that does boot its loader:
+#
+#	booting hd0a:netbsd.old - starting in 0 seconds.
+#	booting hd0a:netbsd/kernel - starting in 0 seconds.
+#
+# IT PUBLISHES NO DISK: `out:` is empty below, so the only artifact is the recording.
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_tag:
+        description: >-
+          the PUBLISHED disk to boot. Empty uses the tag this repository's install leg publishes.
+        default: "bsd-netbsd-install"
+      disks_repository:
+        description: "the ghcr repository that holds the disk"
+        default: "easydev-org/easyvm-bsd"
+
+concurrency:
+  group: netbsd-smoke
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  checks: write
+
+jobs:
+  smoke:
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.4
+    secrets: inherit
+    with:
+      image_repository: easydev-org/easyvm
+      image_tag: v0.0.4
+      disk_gb: "20"
+      group: netbsd-smoke
+      disks_repository: ${{ inputs.disks_repository }}
+      stages: |
+        [
+          {
+            "name": "bsd-netbsd-smoke",
+            "file": "netbsd/steps/smoke.walk",
+            "pull": "${{ inputs.from_tag }}",
+            "out": "",
+            "timeout": 30
+          }
+        ]
