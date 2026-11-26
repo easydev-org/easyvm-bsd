@@ -293,6 +293,50 @@ step "the root password - the repeat"
 # THE CONFIGURATION MENU. `g` enables sshd and `k` enables xdm; both default to NO and both are what
 # the later stages need. Each returns to the same menu, so the two keys are sent separately with the
 # redraw between them.
+# THE PUBLISHER'S FLOOR IS 512 MiB AND THIS INSTALL COMPRESSES TO 511 - SO A REAL SWAP IS WRITTEN.
+#
+# MEASURED: the walk FINISHED, the disk held 1,646 MiB, and `save` compressed it to 535,887,872 bytes
+# - 511.0 MiB, just under `stage.yml`'s 512 MiB floor. An FFS install is mostly zeros, so zstd has
+# almost nothing left after the sets.
+#
+# The honest way over that line is to put something REAL on the disk rather than pad a file to satisfy
+# a check, and swap is the thing this install already reserves: `b` is 2048 MB of it, never written.
+# Writing it once is a normal thing to do to a new swap partition, and it is incompressible.
+#
+# `p: Run /bin/sh` on the configuration menu is the installer's own shell; `exit` returns to the menu.
+step "write the swap partition, which is real data on the disk"
+  do
+    item
+      settle 3
+    item
+      input text "p"
+    item
+      input ret
+      settle 14
+
+step "fill swap from the installer's shell"
+  do
+    item
+      settle 4
+    # `urandom` AND NOT `zero`: zeros compress to nothing, so a `dd` from /dev/zero would leave the
+    # published file exactly as small as before. Random bytes are what qemu-img cannot compress away,
+    # and 1 GiB of them on a 2 GiB swap slice is what puts the published disk over the floor.
+    item
+      input text "dd if=/dev/urandom of=/dev/rld0b bs=1m count=1100 2>&1 | tail -2; sync; echo SWAP_WRITTEN"
+    item
+      input ret
+      settle 40
+
+step "leave the installer's shell"
+  do
+    item
+      settle 4
+    item
+      input text "exit"
+    item
+      input ret
+      settle 14
+
 step "enable sshd"
   do
     item
