@@ -33,7 +33,7 @@ on:
     inputs:
       disks_repository:
         description: "the ghcr repository that holds the disks"
-        default: "bsd-freebsd-ssh"
+        default: "easydev-org/easyvm-bsd"
       from_tag:
         description: >-
           the PUBLISHED disk this stage continues from (default bsd-freebsd-ssh)
