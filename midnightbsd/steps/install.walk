@@ -154,10 +154,16 @@ step "wait for the keymap pane"
       mode text
       rect [0, 0, 720, 400]
       rect_at [720, 400]
-      # MEASURED with tesseract on this pane: the words that read back are "keyboard map" and
-      # "Other keymaps can be chosen below" - the `Keymap Selection` heading is drawn in the same
-      # light blue as the frame and the model drops it, exactly as OpenBSD's `Login:` became `togin:`.
-      words [[keyboard, map], [keymaps, can, be, chosen]]
+      # EITHER PANE MEANS THE WELCOME ONE IS BEHIND US, AND WHICH ONE ARRIVES DEPENDS ON A RACE.
+      #
+      # MEASURED, one commit apart: one RETURN sometimes advances only the welcome pane (the next
+      # screen is `Keymap Selection`) and sometimes takes the keymap pane too, because its first entry
+      # is already selected (the next screen is `Please choose a hostname`). Both are answers to the
+      # same question - "did the installer leave its welcome page" - so both satisfy this gate.
+      #
+      # The keymap pane's own words are "keyboard map" and "keymaps can be chosen"; `Keymap Selection`
+      # is drawn in the frame's light blue and the model drops it, as it does OpenBSD's `Login:`.
+      words [[keyboard, map], [keymaps, can, be, chosen], [choose, a, hostname]]
     max 60
 
 step "continue with the default keymap"
