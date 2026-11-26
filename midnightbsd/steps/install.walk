@@ -63,7 +63,25 @@ step "boot the installer"
     # there. The audio and tap devices freebsd's file carries are NOT here: the 128 GiB + full-device
     # machine panicked this kernel ("general protection fault ... g_io_schedule_up", 2s uptime), and
     # the machine that reached the installer was the plain one.
-    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "4096"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=midnightbsd.iso,media=cdrom,readonly=on,if=none,id=media0"], ["-device", "ide-cd,drive=media0,bootindex=0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=1"]]
+    # IDE AND NOT VIRTIO, BECAUSE THIS KERNEL DOES NOT ADOPT A VIRTIO DISK AS ITS ROOT.
+    #
+    # MEASURED on the 3.1 GiB disk this walk produced, booted with no medium attached:
+
+    #
+    #	mountroot> [type a path and RETURN]
+    #	eg. ufs:/dev/da0s1a
+    #	2 List valid disk boot devices
+    #
+
+    # - the kernel fell through to its manual mount prompt because it could not find `/` by itself. The
+    # device list (`2`) did show `vtbd0s1a`, and typing `ufs:/dev/vtbd0s1a` booted the system all the
+    # way to
+    #
+    #	MidnightBSD FirstBoot Configuration
+    #
+    # so the disk is complete and the only fault is that this release's root-mount does not know
+    # virtio. `ada0s1a` is the name an IDE disk gets, and that is the one its own help text suggests.
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "4096"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=midnightbsd.iso,media=cdrom,readonly=on,if=none,id=media0"], ["-device", "ide-cd,drive=media0,bootindex=0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,id=target"], ["-device", "ide-hd,drive=target,bootindex=1"]]
     timeout 1800
 
 # BIOS, NOT UEFI, AND THE REASON IS MEASURED RATHER THAN PREFERRED.
@@ -578,6 +596,8 @@ step "hardening - nothing to hide on a throwaway guest"
 #
 #	Username:                                        vmuser
 #	Full name:                                       VM User
+#	Age:                                             (empty - MidnightBSD's own adduser asks this,
+#	                                                 FreeBSD's does not)
 #	Uid (Leave empty for default):                   (empty)
 #	Login group is vmuser. Invite ... other groups:   (empty)
 #	Login class [default]:                           (empty)
@@ -586,6 +606,8 @@ step "hardening - nothing to hide on a throwaway guest"
 #	Home directory permissions (Leave empty):         (empty)
 #	Use password-based authentication? [yes]:         (empty -> yes)
 #	Use an empty password? [no]:                      (empty -> no)
+#	Use a random password? [no]:                      (empty -> no)  <- MEASURED, and it exists in
+#	                                                 neither FreeBSD's adduser nor the first list tried
 #	Enter password:                                   the password
 #	Enter password again:                             the password
 #	Lock out the account after creation? [no]:        (empty)
@@ -609,6 +631,13 @@ step "add the account with the installer's own adduser"
     item
       input ret
       settle 4
+    # `Age:` - MEASURED on every run of this pane, and absent from FreeBSD's adduser.
+    item
+      input ret
+      settle 3
+    item
+      input ret
+      settle 3
     item
       input ret
       settle 3
