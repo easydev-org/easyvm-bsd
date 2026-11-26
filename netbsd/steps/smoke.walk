@@ -33,12 +33,57 @@ step "boot the published disk"
     args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "2048"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
     timeout 600
 
-# THE LOADER'S OWN LINE. `booting hd0a:` is bootxx having read the disklabel and started the file
-# system; a disk without bootblocks prints nothing at all here.
+# THE LOADER'S OWN LINE IS ON THE CONSOLE, AND THE LOGIN PROMPT IS ON SCREEN.
+#
+# `booting hd0a:` is bootxx having read the disklabel and started the ffs, and it goes to the serial
+# file the engine already writes. MEASURED on a disk from this walk, booted with no medium:
+#
+#	booting hd0a:netbsd.old - starting in 0 seconds.
+#	open netbsd.old: No such file or directory
+#	booting hd0a:netbsd/kernel - starting in 0 seconds.
+#
+# and the screen reaches `Welcome to ... / Login:` once init and getty are up. A disk whose sets never
+# became a tree stops at the loader with `No such file or directory` and never prints a login prompt.
+# THE SCREEN, NOT THE CONSOLE - MEASURED, this guest writes nothing to the serial file: `wc -c
+# console.log` is 0 on a disk that plainly reaches `Login:` on screen.
 step "the boot loader started the installed file system"
-  until "booting hd"
-  from console
-  timeout 300
+  repeat
+    do
+      item
+        settle 15
+      item "read the screen"
+        read
+          name boot
+    until
+      bind at_boot
+      source boot
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      scale 2
+      # THE LOGIN PROMPT IS THE STRONGEST ANSWER AND IT IS WHAT THE SCREEN SETTLES ON. MEASURED: a
+      # kernel that started and reached init leaves `Welcome to ... / Login:`; one that could not find
+      # `/netbsd` stops at the loader with `No such file or directory` and never draws this.
+      words [[login], [welcome, to], [netbsd]]
+    max 60
+
+step "the system reached a login prompt"
+  repeat
+    do
+      item
+        settle 15
+      item "read the screen"
+        read
+          name up
+    until
+      bind alive
+      source up
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      scale 2
+      words [[login], [welcome, to]]
+    max 40
 
 # THREE MINUTES OF RECORDING, AND NOTHING IS READ FROM IT. Every guest draws a different boot
 # sequence, so a brightness or content threshold here would either be tuned to one of them or be so
