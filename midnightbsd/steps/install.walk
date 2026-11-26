@@ -912,11 +912,15 @@ step "wait for the complete pane"
       mode text
       rect [0, 0, 720, 400]
       rect_at [720, 400]
-      # THE REBOOT IS THE OTHER ACCEPTABLE ANSWER, AND IT IS WHAT USUALLY HAPPENS. MEASURED: the shell's
-      # `exit` returns to the installer, which reboots, and the medium is still bootindex=0 - so the
-      # machine lands back on `Welcome to MidnightBSD`. A gate that waited only for the Complete pane
-      # died there while the disk had already been unmounted and was ready.
-      words [[installation, of, midnightbsd, complete], [reboot, into, the, installed], [welcome, to, midnightbsd]]
+      # THE REBOOT IS THE OTHER ACCEPTABLE ANSWER, AND IT IS WHAT USUALLY HAPPENS. MEASURED on run
+      # 45857136432, which had already unmounted the disk and was sitting on the welcome page:
+      #
+      #	none of "installation of midnightbsd complete" or "reboot into the installed" in
+      #	"MidnightBSD Installer <[pstall>"
+      #
+      # - `Welcome ... <Install>` as tesseract renders it. So the gate accepts `install` too, which is
+      # the one word that page always produces.
+      words [[installation, of, midnightbsd, complete], [reboot, into, the, installed], [welcome, to, midnightbsd], [install]]
     max 40
 
 # `Reboot` IS THE FIRST BUTTON AND IT UNMOUNTS BEFORE RESTARTING.
