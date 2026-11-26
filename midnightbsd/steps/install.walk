@@ -407,7 +407,19 @@ step "the root password"
 #
 # THE ACCOUNT IS MADE IN THE SHELL AT THE END, not in that pane, because the pane asks for a full
 # name, a shell and group memberships this walk does not want.
-step "network - no ipv6"
+# THE NETWORK WIZARD LOOPS, AND ITS SHAPE DEPENDS ON WHAT THIS GUEST'S DHCP ANSWERS.
+#
+# MEASURED, three runs, three shapes:
+#
+#	pod run A    IPv6? -> Resolver -> timezone
+#	pod run B    IPv6? -> Static address -> (Cancel) -> IPv6? -> Resolver -> timezone
+#	CI run       IPv6? -> Static address -> stayed there for the budget
+#
+# So the wizard can ask the IPv6 question MORE THAN ONCE, and the pane between the asks is the static
+# address form, whose Cancel returns to IPv6. The three keys below are therefore replayed: answer No,
+# cancel a static pane if one appears, and answer No again. On the short path the extra keys land on
+# `Search` in the Resolver dialog and change nothing.
+step "the network wizard: no ipv6, no static address, no ipv6"
   do
     item
       settle 4
@@ -416,28 +428,13 @@ step "network - no ipv6"
       settle 1
     item
       input ret
-      settle 12
-
-# THE NETWORK WIZARD'S PATH DEPENDS ON WHAT THE GUEST'S DHCP LEASE LOOKS LIKE, AND CI DIFFERS.
-#
-# MEASURED: the pod went IPv6 -> Resolver Configuration -> timezone. CI, on the same walk, went IPv6 ->
-# **Static Network Interface Configuration** (IP Address / Subnet Mask / Default Router) and stayed
-# there, because its tap did not answer the way the pod's did. The walk then typed a timezone into a
-# text field.
-#
-# `Cancel` on that pane is the answer either way: this guest is on DHCP and the install does not need
-# a static address. The step is written as a `when` so it costs nothing on the path that never shows it.
-# THE STATIC-ADDRESS PANE APPEARS WHEN THIS GUEST'S TAP DOES NOT ANSWER DHCP THE WAY THE OTHER RUN'S
-# DID, AND `when [static]` DID NOT RELIABLY SKIP IT. MEASURED, twice: the pod went IPv6 -> Resolver;
-# CI and a later pod run went IPv6 -> "Static Network Interface Configuration" (IP Address / Subnet
-# Mask / Default Router) and sat there while the walk typed a timezone into its first text field.
-#
-# SO THE CANCEL IS UNCONDITIONAL AND HARMLESS EVERYWHERE ELSE: on the Resolver pane, Tab-RETURN lands
-# on `Search` and changes nothing, and the Resolver pane's own `OK` step follows. On the static pane it
-# cancels the address this DHCP guest does not need.
-step "leave a static-address pane, if that is what the wizard opened"
-  when [interface, configuration]
-  do
+      settle 10
+    item
+      input tab
+      settle 1
+    item
+      input ret
+      settle 10
     item
       settle 3
     item
@@ -446,14 +443,6 @@ step "leave a static-address pane, if that is what the wizard opened"
     item
       input ret
       settle 10
-
-step "resolver configuration - the defaults"
-  do
-    item
-      settle 3
-    item
-      input ret
-      settle 12
 
 step "select the utc region, which is the last entry in the list"
   do
