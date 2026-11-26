@@ -98,40 +98,35 @@ step "wait for the welcome pane"
       words [[welcome, to, midnightbsd]]
     max 120
 
-# THE FRONT OF THIS INSTALLER IS DRIVEN BY WHAT IS ON SCREEN, NOT BY A COUNT OF RETURNS.
+# WELCOME, KEYMAP AND HOSTNAME IN ONE STEP, WITH THE KEYS THAT PANE ALREADY HAS SELECTED.
 #
-# THREE CI RUNS TAUGHT THE SAME LESSON FROM THREE ANGLES:
+# THE OCR OF THE WELCOME PANE IS NOT GOOD ENOUGH TO GATE ON, AND THAT WAS MEASURED RATHER THAN
+# ASSUMED. On this guest's frame, which plainly shows the box, tesseract returns
 #
-#	45755696023  one RETURN after the welcome gate  -> still on the welcome pane 60 attempts later
-#	45757407273  two RETURNs                       -> "Please choose a hostname" (keymap was skipped)
-#	45761752460  the same two RETURNs              -> already on "Choose optional system components"
+#	--psm 6   "MidnightBSD Installer / dpstalb)"     (the <Install> button, mangled)
+#	--psm 11  "MidnightBSD Installer"                 (the title bar and nothing else)
 #
-# The number of pages one RETURN advances depends on how fast the runner's console is, so any fixed
-# count is wrong on some machine. Each step below therefore ASKS WHICH PANE IT IS ON and sends the one
-# key that pane wants. A pane that is already behind us costs nothing.
-step "welcome - install"
+# so `when [welcome, to, midnightbsd]` never fires and a gate written on it never closes. What IS
+# readable is the pane after them - "Distribution Select / optional system components" - so the three
+# panes before it are answered by their own already-selected defaults:
+#
+#	welcome    <Install> is the first button
+#	keymap     `Continue with default keymap` is the first entry
+#	hostname   the field is empty and takes a name
+#
+# and the gate that follows is the one that decides whether all three landed.
+step "install, then the default keymap"
   do
     item
       settle 10
     item
       input ret
       settle 14
-
-step "answer the keymap pane if it is showing"
-  when [keymap]
-  do
-    item
-      settle 4
-    # `Continue with default keymap` is its first entry and is already selected.
     item
       input ret
       settle 12
 
-# THE TYPED NAME GOES ONLY INTO THE PANE THAT ASKS FOR ONE. `when [hostname]` is the guard: on the
-# runner where the keymap pane was still showing, this step is skipped entirely, and the component
-# gate below then waits for the pane the installer actually reached.
-step "the hostname, when that is the pane"
-  when [hostname]
+step "the hostname"
   do
     item
       settle 4
@@ -432,12 +427,19 @@ step "network - no ipv6"
 #
 # `Cancel` on that pane is the answer either way: this guest is on DHCP and the install does not need
 # a static address. The step is written as a `when` so it costs nothing on the path that never shows it.
-step "cancel a static address pane if the wizard offers one"
-  when [static]
+# THE STATIC-ADDRESS PANE APPEARS WHEN THIS GUEST'S TAP DOES NOT ANSWER DHCP THE WAY THE OTHER RUN'S
+# DID, AND `when [static]` DID NOT RELIABLY SKIP IT. MEASURED, twice: the pod went IPv6 -> Resolver;
+# CI and a later pod run went IPv6 -> "Static Network Interface Configuration" (IP Address / Subnet
+# Mask / Default Router) and sat there while the walk typed a timezone into its first text field.
+#
+# SO THE CANCEL IS UNCONDITIONAL AND HARMLESS EVERYWHERE ELSE: on the Resolver pane, Tab-RETURN lands
+# on `Search` and changes nothing, and the Resolver pane's own `OK` step follows. On the static pane it
+# cancels the address this DHCP guest does not need.
+step "leave a static-address pane, if that is what the wizard opened"
+  when [interface, configuration]
   do
     item
-      settle 2
-    # `Cancel` is the second button on that pane.
+      settle 3
     item
       input tab
       settle 1
