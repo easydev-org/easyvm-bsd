@@ -105,13 +105,21 @@ step "wait for the welcome pane"
 # pane - the Install button still highlighted - while the next step waited for the keymap. The pane
 # had been found; it had not finished drawing its buttons. The settle before the key and the longer
 # settle after it are what give it the moment.
+# THE KEY NEEDS THE PANE TO BE FINISHED DRAWING, AND CI'S MACHINE IS SLOWER THAN THE POD'S.
+#
+# MEASURED on run 45755696023, which failed here after 60 attempts:
+#
+#	none of "keyboard map" or "keymaps can be chosen" in "MidnightBSD Installer <[pstall>"
+#
+# The welcome pane is what that OCR read - so the RETURN never advanced it. The pod reached the keymap
+# pane at settle 20; this is three times that, and the gate below is what decides, not the delay.
 step "install, not the live cd"
   do
     item
-      settle 8
+      settle 12
     item
       input ret
-      settle 20
+      settle 30
 
 # THE KEYMAP PANE NEEDS ITS OWN GATE, AND THAT IS THE LESSON OF THE RUN THAT HAD NONE.
 #
@@ -119,6 +127,19 @@ step "install, not the live cd"
 # MANUAL ret from the API advanced it immediately to the hostname pane. The key was not lost - it was
 # sent before the pane existed. A gate is what separates "the key did not work" from "the key arrived
 # too early", and only one of those is a firmware problem.
+# A SECOND PRESS, BECAUSE THE FIRST ONE HAS TO WIN A RACE WITH THE BUTTONS.
+#
+# MEASURED on run 45755696023: the welcome pane's words matched, a RETURN was sent, and the pane was
+# STILL the welcome one sixty attempts later - the key arrived before the buttons were live. One more
+# RETURN after a full settle costs a second and removes the race entirely.
+step "press install once more, in case the first landed early"
+  do
+    item
+      settle 10
+    item
+      input ret
+      settle 20
+
 step "wait for the keymap pane"
   repeat
     do
