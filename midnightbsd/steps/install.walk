@@ -912,7 +912,11 @@ step "wait for the complete pane"
       mode text
       rect [0, 0, 720, 400]
       rect_at [720, 400]
-      words [[installation, of, midnightbsd, complete], [reboot, into, the, installed]]
+      # THE REBOOT IS THE OTHER ACCEPTABLE ANSWER, AND IT IS WHAT USUALLY HAPPENS. MEASURED: the shell's
+      # `exit` returns to the installer, which reboots, and the medium is still bootindex=0 - so the
+      # machine lands back on `Welcome to MidnightBSD`. A gate that waited only for the Complete pane
+      # died there while the disk had already been unmounted and was ready.
+      words [[installation, of, midnightbsd, complete], [reboot, into, the, installed], [welcome, to, midnightbsd]]
     max 40
 
 # `Reboot` IS THE FIRST BUTTON AND IT UNMOUNTS BEFORE RESTARTING.
