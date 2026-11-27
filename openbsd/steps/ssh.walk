@@ -225,7 +225,18 @@ step "run it"
 # it - and `em0` is the installer's own default hint, kept second because the hint is the only other
 # name with any evidence behind it. A name that does not exist makes `dhclient` print one line and exit,
 # which is why trying three is cheap and trying none is what this stage has been paying for.
-# `dhclient` IS GIVEN `-b` SO IT DOES NOT BLOCK THE CONSOLE, AND EVERY REAL INTERFACE IS TRIED.
+# THE INTERFACE IS BROUGHT UP BEFORE IT IS ASKED FOR A LEASE, AND THAT WAS THE MISSING HALF.
+#
+# MEASURED in the lab pod, on this exact published disk, with `ifconfig` typed at its console:
+#
+#	vio0: flags=0002<BROADCAST,SIMPLEX,MULTICAST> mtu 1500
+#
+# NO `UP` IN THE FLAGS. `dhclient -b vio0` on a DOWN interface starts a daemon that has nothing to send
+# on, waits, and gives up - which is why run 46061718541 reached `wait for sshd` with the host reading
+# `ip neigh: 172.30.0.2 FAILED` while every serial gate before it had passed.
+#
+# The interface is `vio0`: `virtio-net-pci` binds OpenBSD's `vio` driver, and the number is the kernel's.
+# It is still ASKED FOR rather than written down, because the name is the kernel's to choose.
 #
 # MEASURED on run 46043440741, the first run whose disk was complete (the boot log reads `Automatic boot
 # in progress` and `MARKING FILE SYSTEM CLEAN`, not `Read-only file system`). It reached
@@ -251,6 +262,16 @@ step "run it"
   settle 4
 
 
+step "bring each interface up"
+  input text "while read i; do ifconfig $i up; done < /tmp/ifs"
+  settle 3
+
+
+step "run it"
+  input ret
+  settle 6
+
+
 step "start a dhclient on each, in the background"
   input text "while read i; do dhclient -b $i; done < /tmp/ifs; echo DHCP_STARTED> /dev/tty00"
 
@@ -258,7 +279,18 @@ step "start a dhclient on each, in the background"
 # THE BOOT-TIME FILE IS WRITTEN FOR WHICHEVER INTERFACE THE LEASE ARRIVED ON, so the address survives
 # the reboot this stage performs at the end.
 step "record the interface that took the lease"
-  input text "while read i; do echo dhcp > /etc/hostname.$i; done < /tmp/ifs; ls /etc/hostname.* > /dev/tty00"
+  input text "while read i; do echo dhcp > /etc/hostname.$i; done < /tmp/ifs"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 5
+
+
+step "list the boot-time files on the serial line"
+  input text "ls /etc/hostname.* > /dev/tty00 2>&1"
+
   settle 3
 
 
