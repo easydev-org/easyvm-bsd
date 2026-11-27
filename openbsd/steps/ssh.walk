@@ -465,8 +465,17 @@ step "the session replaced the greeter with the grey root cwm leaves behind"
       without [[login], [password], [openbsd]]
     max 40
 
+# `sync` NEEDS NO PRIVILEGE AND `sudo` DOES NOT EXIST ON OPENBSD.
+#
+# MEASURED on run 50de90b's run, whose last step failed with
+#
+#	ssh: sudo sync -> 127
+#	  ksh: sudo: not found
+#
+# OpenBSD ships `doas` instead, and `sync` is not a privileged command in the first place - any user may
+# ask the kernel to flush its buffers. So it is called plainly.
 step "flush the writes before the machine stops"
-  ssh "sudo sync"
+  ssh "sync"
   timeout 300
 
 step "press the power button"
