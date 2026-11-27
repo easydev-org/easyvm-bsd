@@ -44,12 +44,14 @@ step "boot the disk"
 # this guest's framebuffer - the install walk answered `serial console? no`, so the serial file carries
 # only firmware lines and the shell is on the VGA screen.
 #
-# THE CONSOLE IS TAKEN AS ROOT, BECAUSE ROOT IS THE ONLY ACCOUNT THAT CAN CHANGE THE INTERFACE, AND
-# THE INSTALL WALK LEFT ROOT WITH NO PASSWORD.
+# THE CONSOLE IS TAKEN AS ROOT, WITH THE PASSWORD THE INSTALL WALK SET.
 #
-# `Allow root ssh login? [no]` is about SSH and is untouched - ssh is still `vmuser`, which is what
-# this file's `user` line says. THIS IS THE CONSOLE, where root has no password on a fresh OpenBSD
-# install (the installer never asked for one), so `root` plus Return is admitted.
+# AN EARLIER VERSION OF THIS FILE ASSERTED ROOT HAD NO PASSWORD, AND THAT WAS WRONG - IT WAS A GUESS
+# THAT COST RUNS 46017870176, 46019950845 AND 46024286444. `openbsd/steps/install.walk` has a step
+# named `root password` that types `{{ password }}` TWICE, at the installer's own
+# `Password for root account? (will not echo)` prompt. So root's password on this disk is `admin1`,
+# and the empty line this walk was sending was REJECTED - which is why no command ever ran, whatever
+# interface name or `rcctl` line was typed after it.
 #
 # `doas` WOULD HAVE BEEN A GUESS: it has no `/etc/doas.conf` on a default install, and `vmuser` is
 # not necessarily in `wheel`. The console asks nothing of either.
@@ -84,9 +86,45 @@ step "take the name"
   settle 5
 
 
-step "the empty password the installer never set"
+step "take the password the installer set for root"
+  input text "{{ password }}"
+  settle 2
+
+
+step "enter it"
   input ret
-  settle 8
+  settle 10
+
+
+# THE SHELL IS PROVED BY A COMMAND, NOT BY A PROMPT CHARACTER. `#` is what root's prompt is and OCR
+# drops it; so the shell is asked to say a word, and the word is what the gate waits for.
+step "the console is a shell"
+  input text "echo SHELL_OK"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 5
+
+
+step "it answered"
+  repeat
+    do
+      item
+        settle 4
+      item "read the screen"
+        read
+          name sh
+    until
+      bind up
+      source sh
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      scale 2
+      words [[SHELL_OK]]
+    max 30
 
 
 # XENODM IS STOPPED BEFORE ANYTHING ELSE, BECAUSE IT TAKES THE SCREEN AND THE TTY OUT FROM UNDER US.
