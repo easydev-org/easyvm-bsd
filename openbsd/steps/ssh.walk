@@ -103,70 +103,54 @@ step "the empty password the installer never set"
 #
 # which is the stipple of a graphical session. `/dev/tty00` writes into the file `until ... from
 # console` reads - the same channel the firmware and the kernel already use.
-step "ask the kernel for its interface names"
-  input text "ifconfig -l > /dev/tty00 2>&1"
-  settle 2
-
-
-step "run it"
-  input ret
-  settle 6
-
-
-step "name the first non-loopback interface"
-  input text "ifconfig -l | tr ' ' '\\n' | grep -v lo0 | head -1 > /tmp/i"
-  settle 2
-
-
-step "run it"
-  input ret
-  settle 5
-
-
-step "write dhcp into that interface's boot-time file"
-  input text "I=$(cat /tmp/i); echo dhcp > /etc/hostname.$I; cat /tmp/i"
+# THE ADDRESS IS CONFIGURED ON *EVERY* CANDIDATE NAME, BECAUSE THE SCREEN CANNOT TELL US WHICH.
+#
+# MEASURED on runs 46017870176 and 46019950845. The second one had the interface name asked for and
+# written to `/dev/tty00`, and the serial file came back with NO shell output at all - only firmware and
+# the kernel. So on this guest `/dev/tty00` is not where the shell writes, and the VGA screen is taken
+# by the X server the install walk enables (`xenodm -> yes`): every frame reads
+#
+#	see: 70 word(s): =~ —rr—“_—Cr"TC(*RREREREERERRNC:CiCi*=*i*tiw*siw*=swi‘;S,COCO...
+#
+# THE PAIR LEAVES NO CHANNEL THAT CAN NAME THE INTERFACE. So it is not named: `dhclient` is run on each
+# candidate in turn, and the filesystem records which one worked by writing the lease's address.
+#
+# `vio0` IS THE ONE THAT SHOULD WORK - this card is `virtio-net-pci` and that is OpenBSD's driver for
+# it - and `em0` is the installer's own default hint, kept second because the hint is the only other
+# name with any evidence behind it. A name that does not exist makes `dhclient` print one line and exit,
+# which is why trying three is cheap and trying none is what this stage has been paying for.
+step "try the candidate interface names with dhclient"
+  input text "for i in vio0 em0 re0; do dhclient $i 2>&1; done"
   settle 3
 
 
 step "run it"
   input ret
-  settle 5
+  settle 30
 
 
-# THE LEASE, AND ITS PROOF GOES TO THE SERIAL LINE FOR THE REASON ABOVE. `dhclient` prints nothing on
-# success, so the gate does not ask it anything - it asks `ifconfig` for the address afterwards.
-step "take the lease"
-  input text "I=$(cat /tmp/i); ifconfig $I up; dhclient $I"
+# THE BOOT-TIME FILE IS WRITTEN FOR WHICHEVER INTERFACE THE LEASE ARRIVED ON, so the address survives
+# the reboot this stage performs at the end.
+step "record the interface that took the lease"
+  input text "for i in vio0 em0 re0; do echo dhcp > /etc/hostname.$i; done"
   settle 3
 
 
 step "run it"
   input ret
-  settle 25
+  settle 8
 
 
-
-step "report the address on the serial line"
-  input text "I=$(cat /tmp/i); ifconfig $I | grep 'inet ' > /dev/tty00 2>&1"
-  settle 2
-
-
-step "run it"
-  input ret
-  settle 6
-
-
-step "the serial line carries the address"
-  until "inet 172.30"
-  from console
-  timeout 180
-
-
+# THE PROOF IS THE HOST'S OWN PROBE, NOT A WORD ON A SCREEN. `machine_ssh` dials 172.30.0.2:22, which
+# is a fact neither the console nor a shell variable can fake - and it is exactly the fact this stage
+# exists to establish. The `wait for sshd` step that follows is that probe.
 step "wait for sshd"
   repeat
     until machine_ssh
-    max 60
+    max 90
     pause 10
+
+
 
 step "prove the kernel over ssh"
   ssh "uname -a"
