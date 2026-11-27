@@ -415,6 +415,32 @@ step "the root account gets one too"
       input ret
       settle 6
 
+# XENODM IS TURNED OFF IN THE PUBLISHED DISK, AND THAT IS THE FIX FOR A RACE THE SSH STAGE CANNOT WIN.
+#
+# MEASURED on runs 46029177844 and 46033506318, whose frames arrive three seconds apart:
+#
+#	frame-000019  see: 196 word(s): Automatic boot in progress: starting file system checks...
+#	frame-000032  see:  51 word(s): .i@8.8@.. openbsd.none Oven'-> —_rwr—wC~d~Csi—...
+#
+# THE TEXT CONSOLE EXISTS FOR ONE FRAME AND THEN X OWNS THE SCREEN. `xenodm=YES` starts the display
+# manager as soon as the file systems are checked, so there is no `login:` prompt to type at and the
+# ssh stage's whole console half - the interface, the lease, `rcctl` - has nowhere to happen. What it
+# was reading as `openbsd.none` was the xenodm greeter's own text seen through the stipple.
+#
+# SO THE DISK IS PUBLISHED WITH `xenodm=NO`, and the display manager is started LATER, by the ssh stage
+# over ssh, at the step whose gates judge the desktop. A console that stays a text console is what makes
+# the console steps possible at all.
+#
+# `rc.conf.local` IS THE RIGHT FILE, NOT `rc.conf`: OpenBSD's rc reads rc.conf first and rc.conf.local
+# after it, so a setting here wins without editing the file the release ships.
+step "publish the disk with xenodm off, so the console stays a console"
+  do
+    item
+      input text "echo xenodm_flags=NO > /mnt/etc/rc.conf.local && cat /mnt/etc/rc.conf.local"
+    item
+      input ret
+      settle 6
+
 step "flush the writes before the machine stops"
   do
     item
