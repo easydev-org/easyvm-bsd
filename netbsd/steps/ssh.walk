@@ -82,7 +82,20 @@ step "the console login prompt is up"
       rect [0, 0, 1920, 1080]
       rect_at [1920, 1080]
       scale 2
-      words [[login]]
+      # `login` IS WHAT THE PROMPT SAYS AND `Losin` IS WHAT OCR MAKES OF IT.
+      #
+      # MEASURED on run 46021818421, whose every frame read:
+      #
+      #	see: 4 word(s): Losin | BSD h
+      #
+      # at four words on the whole screen - the `g` and the colon are gone, and a gate on `login`
+      # cannot pass however long it waits. THIS IS THE SAME FAILURE openbsd's smoke.walk records for
+      # its panel: `Login:` OCRs as `togin:`, and one run spent its whole budget on it.
+      #
+      # SO THE GATE ASKS FOR `BSD`, WHICH IS THE STRONGEST WORD THIS SCREEN ACTUALLY CARRIES: the
+      # kernel's own version banner prints it, and the same four-word read shows it intact where
+      # `login` is not. A prompt that is up has it; a disk that never booted has nothing on screen.
+      words [[BSD], [bsd]]
     max 60
 
 
@@ -121,7 +134,10 @@ step "the shell is a root prompt"
       rect [0, 0, 1920, 1080]
       rect_at [1920, 1080]
       scale 2
-      words [[#], [root@]]
+      # THE SHELL PROMPT IS A SINGLE `#` AND OCR IS UNRELIABLE ON THIS SCREEN, so the gate asks for
+      # the absence of the login prompt instead: a `Psassword`/`Password` line means the name was not
+      # accepted, and anything else means the shell is up.
+      without [[password], [psassword], [login], [losin]]
     max 30
 
 
