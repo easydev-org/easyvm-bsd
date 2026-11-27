@@ -48,7 +48,7 @@ ssh_port 2222
 step "boot the disk"
   boot
     machine "q35,accel=kvm,vmport=off"
-    args [["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    args [["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01"]]
     timeout 900
 
 # THE NETWORK IS CONFIGURED BEFORE `machine_ssh` IS ASKED, BECAUSE THIS WALK USED TO DEADLOCK ON IT.
@@ -280,6 +280,25 @@ step "run it"
 #
 # 172.30.0.2 IS THE ADDRESS EVERY OTHER GUEST HERE USES - the tap is , the host's own
 # diagnosis in this very log says , and the illumos stages write this value.
+# `host_mtu=1450` IS GONE FROM THE NIC, AND THAT IS THE ONE DIFFERENCE LEFT.
+#
+# MEASURED on run 17e59ea's run, whose serial file carries BOTH halves of the contradiction:
+#
+#	host diag [tap]: qemutap0 ... <BROADCAST,MULTICAST,PROMISC,UP,LOWER_UP> mtu 1500 master qemubr0
+#	                 state UP                                            <- THE HOST SIDE IS PERFECT
+#
+#	vio0: flags=2008802<BROADCAST,SIMPLEX,MULTICAST,LRO> mtu 1500
+#	      media: Ethernet autoselect
+#	      status: no carrier                                           <- THE GUEST SEES NO LINK
+#
+# A tap that is UP, LOWER_UP, and enslaved to the bridge cannot be "no carrier" from the host's side, so
+# the disagreement is in the virtio-net device the guest was given. The one unusual argument on it is
+# `host_mtu=1450`, which makes QEMU advertise an MTU through the virtio config space; OpenBSD's `vio`
+# driver reads that before it decides the link is up.
+#
+# IT IS THE ONLY ARGUMENT HERE THAT THE OTHER BSD WALKS DO NOT ALL CARRY INDEPENDENTLY OF THEIR NETWORK,
+# so it is removed and the NIC is left with its MAC and its tap.
+#
 # THE INTERFACE IS BROUGHT UP AND ITS CARRIER IS REPORTED, BECAUSE AN INTERFACE WITH NO CARRIER TAKES
 # NO ADDRESS AND SAYS NOTHING ABOUT IT.
 #
