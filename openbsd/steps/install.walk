@@ -489,7 +489,9 @@ step "prove the new system is mounted before writing to it"
 #
 # TWO FILES, BOTH DOCUMENTED:
 #
-#	/etc/boot.conf   `set tty com0` makes the LOADER and the KERNEL put their console on com0
+#	/etc/boot.conf   `stty com0 9600` sets that line's SPEED, `set tty com0` makes the LOADER and the
+#	                 KERNEL put their console on com0. OpenBSD's own FAQ 7 lists both lines; without
+#	                 `stty` the loader picks its default speed and the reader gets line noise.
 #	/etc/ttys        `tty00 "/usr/libexec/getty std.9600" vt100 on secure` gives that line a getty, so
 #	                 there is a `login:` to type at; OpenBSD ships tty00 as `off secure`
 #
@@ -498,10 +500,20 @@ step "prove the new system is mounted before writing to it"
 step "put the console on the serial line"
   do
     item
-      input text "echo set tty com0 > /mnt/etc/boot.conf && cat /mnt/etc/boot.conf"
+      input text "echo stty com0 9600 > /mnt/etc/boot.conf"
     item
       input ret
       settle 6
+
+# TWO `echo`s, because `printf` IS NOT IN THE RAMDISK'S SHELL - this file already records
+# `sh: printf: not found` from an earlier step that used it.
+step "append the console switch"
+  do
+    item
+      input text "echo set tty com0 >> /mnt/etc/boot.conf; cat /mnt/etc/boot.conf"
+    item
+      input ret
+      settle 5
 
 step "give that line a getty, which ships off"
   do
