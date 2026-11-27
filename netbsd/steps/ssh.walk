@@ -1,0 +1,281 @@
+# netbsd 11.1 - sshd, the desktop from pkgin, and a server that answers.
+#
+# READ `netbsd/steps/install.walk` FIRST. It ends with the sets extracted and the configuration menu
+# answered, and its own header records what that left on the disk:
+#
+#	`g` enables sshd      MEASURED: the installer's sshd toggle defaults to NO, and this stage needs it
+#	`k` enables xdm       the graphical login, also NO by default
+#
+# SO SSHD IS ALREADY ENABLED ON THIS DISK. WHAT IS NOT THERE IS AN ADDRESS.
+#
+# THE INSTALL WALK NEVER CONFIGURES THE NETWORK, AND THAT IS MEASURED: its own comment says
+# `Configure network` TERMINATES sysinst at its netmask prompt, so the walk does not touch it. A booted
+# disk therefore has sshd running and no address to reach it on - the same deadlock openbsd's stage
+# had, where `machine_ssh` was asked before anything could satisfy it.
+#
+# `machine_ssh` IS THE LAST QUESTION HERE. The address is set from the console first:
+#
+#	root + admin1                     the password install.walk set on the root account
+#	echo dhcp > /etc/ifconfig.vtnet0  the boot-time file, so the lease survives the reboot
+#	ifconfig vtnet0 up; dhclient      the lease itself
+#
+# THE INTERFACE IS `vtnet0`: this guest's card is `virtio-net-pci`, and NetBSD's driver for it is
+# `virtnet`/`vtnet`. The walk does not assume - it prints `ifconfig -l` first, so a wrong name is
+# named in the log rather than looking like a dhclient that did nothing.
+#
+# THE DESKTOP IS THE CLAIM THE PACKAGES ARE FOR. install.walk's own note says the desktop belongs
+# here, installed from pkgin, "because a package install is a network operation" - and this is the
+# stage where the network exists. So the second half of this file installs Xfce and its display
+# manager and then proves the greeter drew.
+walkthrough "netbsd 11.1 - sshd, the desktop from pkgin, and a server that answers"
+resolution 1920x1080
+recording_resolution 1920x1080
+user root
+var out
+  default out/netbsd-ssh.qcow2
+  from args.out
+password admin1
+var user
+  default root
+  from args.user
+ssh_port 2222
+
+
+step "boot the published disk"
+  boot
+    machine "q35,accel=kvm,vmport=off"
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "2048"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    timeout 900
+
+
+# THIS GUEST WRITES NOTHING TO THE SERIAL FILE - `netbsd/steps/smoke.walk` measured `wc -c console.log`
+# at 0 on a disk that plainly reaches `Login:` on screen. So every gate in this file reads the
+# FRAMEBUFFER, and each attempt presses Return first, because a framebuffer that has not been poked
+# keeps showing whatever the kernel last drew on it.
+step "the console login prompt is up"
+  repeat
+    do
+      item "wake the framebuffer, which otherwise keeps the boot banner"
+        input ret
+        settle 3
+      item
+        settle 4
+      item "read the screen"
+        read
+          name login
+    until
+      bind up
+      source login
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      scale 2
+      words [[login]]
+    max 60
+
+
+step "log in as root"
+  input text "{{ user }}"
+  settle 2
+
+
+step "take the name"
+  input ret
+  settle 5
+
+
+step "take the password install.walk set"
+  input text "{{ password }}"
+  settle 2
+
+
+step "enter it"
+  input ret
+  settle 8
+
+
+step "the shell is a root prompt"
+  repeat
+    do
+      item
+        settle 4
+      item "read the screen"
+        read
+          name sh
+    until
+      bind up
+      source sh
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      scale 2
+      words [[#], [root@]]
+    max 30
+
+
+# THE INTERFACE'S NAME IS ASKED FOR, NOT ASSUMED. The card is virtio-net, whose NetBSD driver is
+# `vtnet`, but the unit number is the kernel's to choose and a walk that writes `vtnet0` without
+# looking would configure nothing on a machine that called it `vioif0`.
+step "list the interfaces the kernel has"
+  input text "ifconfig -l"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 5
+
+
+step "name the interface once"
+  input text "ifconfig -l | tr ' ' '\\n' | grep -v lo0 | head -1 > /tmp/i"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 4
+
+
+step "put dhcp in the boot-time file for the first non-loopback interface"
+  input text "I=$(cat /tmp/i); echo dhcp > /etc/ifconfig.$I; echo IFACE=$I"
+  settle 3
+
+
+step "run it"
+  input ret
+  settle 5
+
+
+# THE LEASE ITSELF, SEPARATELY FROM THE FILE, so a failure names which half broke.
+#
+# `/etc/ifconfig.<if>` IS DATA, NOT A SCRIPT - `dhcp` on its own line is read by the rc scripts at boot,
+# and running it through `sh` would try to execute a command called `dhcp`. So the interface is named
+# once into a file and then used: `ifconfig $I up` plus `dhcpcd $I`, which is what the boot path does
+# too. `dhcpcd` ships in NetBSD's base system and is the daemon that answers the tap.
+step "take a lease"
+  input text "I=$(cat /tmp/i); ifconfig $I up; dhcpcd -n $I"
+  settle 3
+
+
+step "run it"
+  input ret
+  settle 25
+
+
+# THE ADDRESS IS READ BACK AND THE GATE ASKS FOR THE PREFIX THIS CLUSTER USES. NetBSD's dhclient and
+# dhcpcd both write `inet 172.30.0.x/24` on the tap this guest is behind, so `172.30` is the part that
+# says a lease arrived rather than a link-local address.
+step "the console reports the address"
+  repeat
+    do
+      item "wake the console"
+        input ret
+        settle 2
+      item "ask the guest for its address"
+        input text "ifconfig | grep 'inet 172'"
+        settle 2
+      item
+        input ret
+        settle 6
+      item "read it"
+        read
+          name addr
+    until
+      bind up
+      source addr
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      scale 2
+      words [[inet, 172.30]]
+    max 20
+
+
+step "wait for sshd"
+  repeat
+    until machine_ssh
+    max 60
+    pause 10
+
+
+step "prove the kernel over ssh"
+  ssh "uname -a"
+
+
+step "prove the account over ssh"
+  ssh "id -un"
+
+
+step "prove the disk is the one the installer wrote"
+  ssh "df -h / | tail -1"
+
+
+# THE DESKTOP, WHICH `install.walk` NAMES AS THIS STAGE'S JOB. pkgin is the binary package manager on
+# NetBSD, and NetBSD's release repositories are what it reads; `pkgin -y install` is non-interactive.
+step "the package manager is there"
+  ssh "pkgin -v"
+  timeout 60
+
+
+step "install xfce and the display manager"
+  ssh "pkgin -y install xfce4 xfce4-goodies xorg-server xdm 2>&1 | tail -20"
+  timeout 1800
+
+
+step "enable xdm, which is the graphical login"
+  ssh "printf 'xdm=YES\n' >> /etc/rc.conf; grep -c xdm=YES /etc/rc.conf"
+  timeout 60
+
+
+# THE SESSION IS STARTED FROM THE CONSOLE, because xdm was already enabled by the installer and this
+# guest is at a root prompt, not a display manager. Starting it here makes the greeter draw on the
+# screen this stage records, which is the claim the desktop packages are for.
+step "start the display manager from the console"
+  input text "sh /etc/rc.d/xdm start 2>&1 | tail -3"
+  settle 3
+
+
+step "run it"
+  input ret
+  settle 30
+
+
+# THE GREETER IS THE PROOF THE DESKTOP RUNS. xdm draws a login panel; a machine with no X server, a
+# missing xfce or a broken config draws nothing and leaves the text console. So the gate is "the text
+# console is gone", which is a shape the screen cannot fake.
+step "the display manager replaced the text console"
+  repeat
+    do
+      item
+        settle 10
+      item "read the screen"
+        read
+          name desk
+    until
+      bind up
+      source desk
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      scale 2
+      without [[login], [root@]]
+    max 40
+
+
+step "flush the writes before the machine stops"
+  ssh "sync"
+  timeout 300
+
+
+step "shut the machine down"
+  stop ssh
+  timeout 300
+
+
+step "wait for the machine to stop"
+  wait_until stopped
+  timeout 600
+
+
+step "publish the disk"
+  save "{{ out }}"

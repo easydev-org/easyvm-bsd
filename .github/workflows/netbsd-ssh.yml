@@ -1,0 +1,55 @@
+name: netbsd-ssh
+
+# netbsd, AS ITS OWN STAGE. `netbsd/steps/ssh.walk` PROVES SSHD AND THE DESKTOP THAT `install.walk`
+# NAMES AS THIS STAGE'S JOB.
+#
+# `netbsd/steps/install.walk` ends with the sets extracted and the configuration menu answered, and it
+# enables `sshd` and `xdm` there. Its own comment says the DESKTOP belongs to this stage, installed
+# from pkgin, "because a package install is a network operation" - and this is the stage where the
+# network exists.
+#
+# THE SHAPE IS THE ONE freebsd-ssh.yml ESTABLISHED. `needs:` does not cross workflows, so the tag is
+# the dependency and `pull:` names it: a leg that asked for a tag the leg before it publishes would get
+# a 404 while that leg is running, fall back to the INSTALL disk, and burn its budget there.
+
+on:
+  workflow_dispatch:
+    inputs:
+      disks_repository:
+        description: "the ghcr repository that holds the disks"
+        default: "easydev-org/easyvm-bsd"
+      from_tag:
+        description: >-
+          the PUBLISHED disk this stage continues from (default bsd-netbsd-install)
+        default: "bsd-netbsd-install"
+
+concurrency:
+  group: netbsd-ssh
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  checks: write
+
+jobs:
+  ssh:
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.4
+    secrets: inherit
+    with:
+      image_repository: easydev-org/easyvm
+      image_tag: v0.0.4
+      disk_gb: "20"
+      group: netbsd-ssh
+      disks_repository: ${{ inputs.disks_repository }}
+      stages: |
+        [
+          {
+            "name": "bsd-netbsd-ssh",
+            "file": "netbsd/steps/ssh.walk",
+            "pull": "${{ inputs.from_tag }}",
+            "out": "bsd-netbsd-ssh.qcow2",
+            "publish": "bsd-netbsd-ssh",
+            "timeout": 300
+          }
+        ]
