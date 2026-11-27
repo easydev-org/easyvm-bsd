@@ -164,6 +164,40 @@ step "run it"
   settle 4
 
 
+# XDM IS STOPPED FIRST, FOR THE REASON openbsd's stage JUST MEASURED.
+#
+# `install.walk` answers `k` at the configuration menu, which enables `xdm`, the graphical login. On the
+# boot that follows it starts and takes the console: MEASURED on run 46023357350, where every frame at
+# the address gate read
+#
+#	see: 2 word(s): a —
+#
+# - two words, because the text console is gone and a display manager is drawing. Commands typed after
+# that reach a graphical login, not a shell, which is why `dhclient` never configured anything and the
+# host kept reading `ip neigh: 172.30.0.2 FAILED`.
+#
+# `xdm=NO` in rc.conf stops it at the next boot and `kill` ends the one that is up now. The desktop is
+# started deliberately later, at the step whose gates judge it.
+step "stop xdm, which takes the console away"
+  input text "grep -v xdm= /etc/rc.conf > /tmp/r; echo xdm=NO >> /tmp/r; cp /tmp/r /etc/rc.conf"
+  settle 3
+
+
+step "run it"
+  input ret
+  settle 4
+
+
+step "end the session that is already up"
+  input text "/etc/rc.d/xdm stop"
+  settle 3
+
+
+step "run it"
+  input ret
+  settle 10
+
+
 step "put dhcp in the boot-time file for the first non-loopback interface"
   input text "I=$(cat /tmp/i); echo dhcp > /etc/ifconfig.$I; echo IFACE=$I"
   settle 3
