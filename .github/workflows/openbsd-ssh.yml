@@ -1,0 +1,61 @@
+name: openbsd
+
+# openbsd, AS ITS OWN STAGE. `openbsd/steps/ssh.walk` PROVES THE DESKTOP, NOT ONLY SSHD.
+#
+# THE SHAPE IS THE ONE freebsd-ssh.yml USES, for the same measured reason: a leg that asks for a tag
+# the leg before it publishes gets a 404 while that leg is still running, falls back to the INSTALL
+# disk, and burns its whole budget on a machine that has no desktop. `needs:` is not available across
+# workflows, so the tag is the dependency and `pull:` is where it is named.
+#
+# `openbsd/steps/ssh.walk` WAS IN THE REPOSITORY BEFORE THIS FILE WAS, and it could not be run: it
+# used `{{ user }}` without declaring `var user`, so `easyvm check` refused it with
+#
+#	"cat /home/{{ user }}/.xsession" names "user", which is not in vars (args.work, out, password, work)
+#
+# THAT IS FIXED IN THE SAME COMMIT AS THIS FILE. The walk proves what a person would use on the
+# installed system: an sshd that answers, the account that owns the desktop, `cwm` in the base system,
+# `xenodm` bringing the session up, and the grey root window `cwm` leaves behind - which the walk's
+# own header explains is a colour, not a threshold, so it cannot be satisfied by a machine stuck at
+# the greeter.
+
+on:
+  workflow_dispatch:
+    inputs:
+      disks_repository:
+        description: "the ghcr repository that holds the disks"
+        default: "easydev-org/easyvm-bsd"
+      from_tag:
+        description: >-
+          the PUBLISHED disk this stage continues from (default bsd-openbsd-install)
+        default: "bsd-openbsd-install"
+
+concurrency:
+  group: openbsd-ssh
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  checks: write
+
+jobs:
+  ssh:
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.4
+    secrets: inherit
+    with:
+      image_repository: easydev-org/easyvm
+      image_tag: v0.0.4
+      disk_gb: "10"
+      group: openbsd-ssh
+      disks_repository: ${{ inputs.disks_repository }}
+      stages: |
+        [
+          {
+            "name": "bsd-openbsd-ssh",
+            "file": "openbsd/steps/ssh.walk",
+            "pull": "${{ inputs.from_tag }}",
+            "out": "bsd-openbsd-ssh.qcow2",
+            "publish": "bsd-openbsd-ssh",
+            "timeout": 240
+          }
+        ]

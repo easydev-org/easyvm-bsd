@@ -11,19 +11,25 @@ name: freebsd
 # SCHEDULED until then. The cost is the sum rather than the maximum, and a serial chain that finishes
 # is worth more than a parallel one whose third leg always times out.
 #
-# FREEBSD REPLACES GHOSTBSD, AND THE MEASUREMENT THAT DECIDED IT IS IN THE ESP:
+# FREEBSD KEEPS ITS OWN CHAIN. THE NOTE THAT USED TO STAND HERE SAID GHOSTBSD WAS REPLACED BECAUSE
+# ITS EFI LOADER WAS ZERO BYTES - AND THAT NOTE WAS OUT OF DATE, WHICH `ghostbsd-smoke` ITSELF SHOWS.
 #
-#	FreeBSD 15.1  EFI/BOOT/BOOTX64.EFI  665600 bytes, first16 = 4d5a90000300000004000000ffff0000
-#	GhostBSD 26.3 EFI/BOOT/BOOTX64.EFI       0 bytes
+# THE MEASUREMENT THAT REPLACES IT. Run 45664907078 (`ghostbsd-smoke`, 03e6cbb) boots the published
+# `bsd-ghostbsd-install` disk and its recording reaches the desktop:
 #
-# GhostBSD's GBI writes a ZERO-BYTE boot loader into the EFI system partition, so UEFI cannot load
-# the installed system and the machine falls back to the install CD. That is a defect in GBI that no
-# walkthrough can repair - the disk it leaves is not bootable. FreeBSD's `bsdinstall` writes a real
-# MZ/PE executable, and a disk from this chain boots to `login:` with no CD attached.
+#	=== a ghostbsd screen, which is what says the disk is not just bootable but usable
+#	  [until]: __until__ = true (read "ghostbsd initial setup")
 #
-# FREEBSD IS NOT THE CHEAPER VERSION OF GHOSTBSD EITHER: both are the same base system, and FreeBSD
-# additionally has a SCRIPTED installer (`bsdinstall script`) whose preamble is a file rather than a
-# sequence of dialogs.
+#	console.log:  Loading splash ok
+#	              EFI framebuffer information:  dimensions 1920 x 1080
+#
+# and the frame is GhostBSD's own "GhostBSD Initial Setup / please select your language" window over
+# its wallpaper - a disk that boots, draws, and is usable. SO GHOSTBSD GETS ITS OWN SSH STAGE TOO
+# (`ghostbsd-ssh.yml`), rather than being replaced here.
+#
+# WHAT IS STILL TRUE, AND IS WHY THE TWO CHAINS STAY SEPARATE: FreeBSD and GhostBSD are the same base
+# system but different installers - `bsdinstall` versus GBI - so a walk that drives one cannot drive
+# the other. Each distribution has its own walk, its own tag and its own workflow.
 #
 
 on:

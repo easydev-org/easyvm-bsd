@@ -17,6 +17,9 @@ var out
   default out/openbsd-ssh.qcow2
   from args.out
 password admin1
+var user
+  default vmuser
+  from args.user
 ssh_port 2222
 
 step "boot the disk"
