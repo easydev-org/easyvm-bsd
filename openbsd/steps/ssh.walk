@@ -89,20 +89,32 @@ step "boot the disk"
 #    satisfy it. Only `login` says the prompt is up.
 #
 # `smoke.walk` on this same disk reads the prompt with no input at all, so no wake is needed.
-# THE LOGIN PROMPT IS READ FROM THE SERIAL FILE, NOT FROM A PICTURE OF IT.
+# THE PROMPT IS READ OFF THE SCREEN, BECAUSE A SERIAL CONSOLE CANNOT BE TYPED AT.
 #
-# MEASURED over eight runs: the VGA channel stops advancing at the boot log -
+# MEASURED on run 46051395300, which put the console on com0: the serial log was perfect - the whole boot
+# arrived, `starting network daemons: sshd smtpd sndiod`, and `login:` in thirty-one seconds - AND NOT
+# ONE TYPED CHARACTER REACHED IT. `input text` goes to the PS/2 keyboard, which the kernel hands to the
+# VGA console; `set tty` picks one console, so a com0 console is readable and not writable.
 #
-#	see: 150 word(s): starting RPC daemons: . savecore: no core dump checking quotas: done. clearing ...
-#
-# - one run's gate was even satisfied by noise in that text while the screen showed no prompt at all.
-# AND `openbsd/steps/install.walk` NOW ANSWERS THE INSTALLER'S `serial console?` WITH `yes`, which writes
-# `/etc/boot.conf` with `set tty com0` on the published disk. So the console is a FILE the engine already
-# writes, exactly as it is on smartos and omnios, and `until ... from console` reads it without OCR.
-step "the console login prompt is in the serial file"
-  until "login:"
-  from console
-  timeout 600
+# SO THE DISK NOW CARRIES `set tty fb0` (see install.walk) and this file reads the FRAMEBUFFER again -
+# with the framebuffer's own font, which is what the `fb0` choice buys over the VGA text cells that OCR
+# has been misreading as `Qnon?` and `Losin`.
+step "the console login prompt is up"
+  repeat
+    do
+      item
+        settle 8
+      item "read the screen"
+        read
+          name login
+    until
+      bind up
+      source login
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      words [[login]]
+    max 60
 
 
 step "log in at the console as root"
@@ -137,10 +149,22 @@ step "run it"
   settle 5
 
 
-step "it answered, in the serial file"
-  until "SHELL_OK"
-  from console
-  timeout 120
+step "it answered"
+  repeat
+    do
+      item
+        settle 5
+      item "read the screen"
+        read
+          name sh
+    until
+      bind up
+      source sh
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      words [[SHELL_OK]]
+    max 30
 
 
 # XENODM IS STOPPED BEFORE ANYTHING ELSE, BECAUSE IT TAKES THE SCREEN AND THE TTY OUT FROM UNDER US.
