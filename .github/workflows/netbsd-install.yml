@@ -45,7 +45,11 @@ permissions:
 
 jobs:
   install:
-    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.4
+    # THE BRANCH THAT MAKES THE FLOOR AN INPUT, UNTIL IT MERGES AND TAGS.
+    # `@v0.0.4` hard-codes 512 MiB, which refuses this leg's real 511 MiB system and once pushed the
+    # walk into writing 1.1 GiB of urandom to clear it. Once `floor-input` lands and is tagged, this
+    # goes back to a tag.
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@floor-input
     secrets: inherit
     with:
       image_repository: easydev-org/easyvm
@@ -56,9 +60,19 @@ jobs:
       # disk - every set extracted - but `save` compresses with zstd and an FFS install is mostly
       # zeros, so the published file came out 535,625,728 bytes against stage.yml's 512 MiB floor.
       # Going from 10 to 20 GiB did NOT change it: sysinst's default swap does not grow with the disk,
-      # so the compressed size did not either. The floor is cleared in the walk itself, by writing
-      # real data into the disk rather than by asking for more of it - see `netbsd/steps/install.walk`.
+      # so the compressed size did not either.
+      #
+      # THE FLOOR IS NOT THE WALK'S PROBLEM, SO IT IS NO LONGER PATCHED IN THE WALK. For a while this
+      # leg wrote 1.1 GiB of /dev/urandom into the swap slice to clear the check; MEASURED on run
+      # 45906011040 that turned a 535 MiB system into a 1611 MiB image in which 1,100 MiB was random
+      # bytes, so the published size said nothing about what was inside. The check is what was wrong,
+      # and `stage.yml` now takes `disk_floor_mb` per leg.
+      #
+      # 400 MB, AND THE NUMBER IS CHECKABLE RATHER THAN CONVENIENT: a complete NetBSD 11.1 with every
+      # set compresses to 535,887,872 bytes, so 400 leaves a third of the real size as headroom while
+      # staying two thousand times above the 197,632-byte qcow2 header this check exists to refuse.
       disk_gb: "20"
+      disk_floor_mb: "400"
       group: netbsd-install
       disks_repository: ${{ inputs.disks_repository }}
       stages: |
