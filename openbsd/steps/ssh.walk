@@ -101,6 +101,26 @@ step "boot the disk"
 # SO THE DISK NOW CARRIES `set tty fb0` (see install.walk) and this file reads the FRAMEBUFFER again -
 # with the framebuffer's own font, which is what the `fb0` choice buys over the VGA text cells that OCR
 # has been misreading as `Qnon?` and `Losin`.
+# THE GATE ASKS FOR `ttyC0`, NOT FOR `login`, AND THAT IS THE BUG THIS STAGE KEPT HITTING.
+#
+# MEASURED on run 46054365071, whose third attempt reported
+#
+#	see: 179 word(s): /dev/sd0h (...): MARKING FILE SYSTEM CLEAN /dev/sd0k ...
+#	the console login prompt is up [until]: __until__ = true (read "login")
+#	repeat: satisfied after 3 attempt(s)
+#
+# THE FRAME THAT SATISFIED IT WAS STILL IN fsck. There is no prompt on it - the word `login` was matched
+# out of the device paths and filenames the check prints. Everything after that step then typed at a
+# screen that was still booting, and by the time the real prompt arrived the console had stopped
+# refreshing and the `SHELL_OK` gate read one frozen frame thirty times.
+#
+# `ttyC0` IS THE WORD ONLY A REAL PROMPT CARRIES: OpenBSD prints
+#
+#	OpenBSD/amd64 (openbsd.none) (ttyC0)
+#	Login:
+#
+# immediately above the prompt, and nothing in fsck, in `MARKING FILE SYSTEM CLEAN`, or in a device path
+# contains it. The gate now waits for that.
 step "the console login prompt is up"
   repeat
     do
@@ -115,7 +135,7 @@ step "the console login prompt is up"
       mode text
       rect [0, 0, 3840, 2160]
       rect_at [3840, 2160]
-      words [[login]]
+      words [[ttyC0]]
     max 60
 
 
@@ -151,11 +171,18 @@ step "run it"
   settle 5
 
 
+# THE SCREEN IS POKED BEFORE EACH READ, BECAUSE A STILL FRAME IS A STALE ONE.
+#
+# MEASURED on run 46054365071: this gate read THIRTY FRAMES AND GOT ONE HASH -
+# `library: sh -> 3cc15fbcf93fd2e4` thirty times. The console had stopped refreshing, so no amount of
+# waiting would have changed what it showed. Pressing Return makes the shell redraw its prompt, which is
+# a write to the console and is what re-arms the framebuffer.
 step "it answered"
   repeat
     do
-      item
-        settle 5
+      item "poke the console so it redraws"
+        input ret
+        settle 3
       item "read the screen"
         read
           name sh
@@ -166,7 +193,7 @@ step "it answered"
       rect [0, 0, 3840, 2160]
       rect_at [3840, 2160]
       words [[SHELL_OK]]
-    max 30
+    max 40
 
 
 # XENODM IS STOPPED BEFORE ANYTHING ELSE, BECAUSE IT TAKES THE SCREEN AND THE TTY OUT FROM UNDER US.
