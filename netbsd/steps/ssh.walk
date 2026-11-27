@@ -104,8 +104,8 @@ step "the boot loader started the installed file system"
       bind at_boot
       source boot
       mode text
-      rect [0, 0, 720, 400]
-      rect_at [720, 400]
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
       scale 1
       # `Losin` IS WHAT OCR MAKES OF `Login` ON THIS SCREEN - MEASURED, `see: 4 word(s): Losin | BSD h`
       # - so the loader gate asks for `BSD`, which survives the same read intact.
@@ -125,8 +125,8 @@ step "the console login prompt is up"
       bind up
       source login
       mode text
-      rect [0, 0, 720, 400]
-      rect_at [720, 400]
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
       scale 1
       # `login` IS WHAT THE PROMPT SAYS AND `Losin` IS WHAT OCR MAKES OF IT.
       #
@@ -177,8 +177,8 @@ step "the shell is a root prompt"
       bind up
       source sh
       mode text
-      rect [0, 0, 720, 400]
-      rect_at [720, 400]
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
       scale 1
       # THE SHELL PROMPT IS A SINGLE `#` AND OCR IS UNRELIABLE ON THIS SCREEN, so the gate asks for
       # the absence of the login prompt instead: a `Psassword`/`Password` line means the name was not
@@ -244,49 +244,23 @@ step "run it"
   settle 10
 
 
-step "put dhcp in the boot-time file for the first non-loopback interface"
-  input text "I=$(cat /tmp/i); echo dhcp > /etc/ifconfig.$I; echo IFACE=$I"
+# THE ADDRESS IS WRITTEN DOWN, AND EVERY REAL INTERFACE GETS IT.
+#
+# MEASURED across three runs of this stage: DHCP produced nothing. `install.walk` never configures the
+# network - its own header says `Configure network` terminates sysinst at the netmask prompt - and the tap
+# behind this guest is `172.30.0.1/24` with no DHCP server on it. That is the same finding the smartos,
+# omnios and openbsd stages each reached for this same tap.
+#
+# 172.30.0.2 IS THE ADDRESS EVERY OTHER GUEST HERE USES - the host's own diagnosis says
+# `172.30.0.2 dev qemubr0`, and the other BSD stages write this value.
+#
+# THE INTERFACE NAME IS NOT GUESSED. NetBSD takes a CIDR suffix in `ifconfig` (unlike OpenBSD), so one
+# command can serve whichever interface the kernel named:
+#
+#	for i in $(ifconfig -l); do test $i = lo0 || ifconfig $i inet 172.30.0.2/24; done
+step "give every real interface the address this cluster uses"
+  input text "for i in $(ifconfig -l); do test $i = lo0 || ifconfig $i inet 172.30.0.2/24; done"
   settle 3
-
-
-step "run it"
-  input ret
-  settle 5
-
-
-# THE LEASE ITSELF, SEPARATELY FROM THE FILE, so a failure names which half broke.
-#
-# `/etc/ifconfig.<if>` IS DATA, NOT A SCRIPT - `dhcp` on its own line is read by the rc scripts at boot,
-# and running it through `sh` would try to execute a command called `dhcp`. So the interface is named
-# once into a file and then used: `ifconfig $I up` plus `dhcpcd $I`, which is what the boot path does
-# too. `dhcpcd` ships in NetBSD's base system and is the daemon that answers the tap.
-step "take a lease"
-  input text "I=$(cat /tmp/i); ifconfig $I up; dhcpcd -n $I"
-  settle 3
-
-
-step "run it"
-  input ret
-  settle 25
-
-
-# THE ADDRESS IS READ BACK AND THE GATE ASKS FOR THE PREFIX THIS CLUSTER USES. NetBSD's dhclient and
-# dhcpcd both write `inet 172.30.0.x/24` on the tap this guest is behind, so `172.30` is the part that
-# says a lease arrived rather than a link-local address.
-# THE ADDRESS IS READ ONCE, FROM ONE FRAME, AND THE REAL PROOF IS `machine_ssh`.
-#
-# MEASURED on the run before this one: the gate typed `ifconfig | grep` on EVERY attempt into a
-# 720x400 console - twenty-five text lines, no scrollback worth reading - so each iteration pushed the
-# previous answer off the screen and the frame it read was two words of noise:
-#
-#	see: 2 word(s): _ i
-#
-# A GATE THAT WRITES TO THE THING IT READS CANNOT READ IT. So the command is typed once, and the gate
-# below it is the host's own dial of 172.30.0.2:22 - a fact neither the console nor a shell variable can
-# fake, and exactly the fact this stage exists to establish.
-step "ask the guest for its address once"
-  input text "ifconfig | grep 'inet '"
-  settle 2
 
 
 step "run it"
@@ -294,6 +268,27 @@ step "run it"
   settle 8
 
 
+step "what does the guest say its addresses are"
+  input text "ifconfig -a | grep 'inet '"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 6
+
+
+step "record the address for the next boot"
+  input text "for i in $(ifconfig -l); do test $i = lo0 || echo inet 172.30.0.2/24>/etc/ifconfig.$i; done"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 5
+
+
+# THE ADDRESS IS PROVED BY THE HOST'S OWN DIAL, not by a word on the screen - `machine_ssh` is that dial.
 step "the address is on the screen"
   repeat
     do
@@ -306,11 +301,11 @@ step "the address is on the screen"
       bind up
       source addr
       mode text
-      rect [0, 0, 720, 400]
-      rect_at [720, 400]
-      scale 1
-      words [[inet]]
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      words [[inet, 172.30]]
     max 20
+
 
 
 step "wait for sshd"
@@ -377,8 +372,8 @@ step "the display manager replaced the text console"
       bind up
       source desk
       mode text
-      rect [0, 0, 720, 400]
-      rect_at [720, 400]
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
       scale 1
       without [[login], [root@]]
     max 40
