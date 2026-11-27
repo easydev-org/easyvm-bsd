@@ -253,7 +253,7 @@ step "run it"
 # AND THE LIST IS THE INTERFACES THE KERNEL ACTUALLY HAS, not three guesses: `ifconfig -l` is what names
 # this guest's card, and every name it prints except `lo0` is given a lease attempt.
 step "give every real interface a dhclient, in the background"
-  input text "ifconfig -l | tr ' ' '\\n' | grep -v lo0 > /tmp/ifs"
+  input text "ifconfig -l | sed 's/lo0//' > /tmp/ifs"
   settle 3
 
 
@@ -281,7 +281,7 @@ step "run it"
 # 172.30.0.2 IS THE ADDRESS EVERY OTHER GUEST HERE USES - the tap is , the host's own
 # diagnosis in this very log says , and the illumos stages write this value.
 step "give the interface the address this cluster uses"
-  input text "while read i; do ifconfig $i 172.30.0.2 netmask 255.255.255.0; done < /tmp/ifs"
+  input text "I=$(cat /tmp/ifs); ifconfig $I inet 172.30.0.2 netmask 255.255.255.0"
   settle 3
 
 
@@ -291,7 +291,7 @@ step "run it"
 
 
 step "write the address into the boot-time file"
-  input text "while read i; do echo 172.30.0.2 > /etc/hostname.$i; done < /tmp/ifs"
+  input text "I=$(cat /tmp/ifs); echo 172.30.0.2 > /etc/hostname.$I"
   settle 2
 
 
