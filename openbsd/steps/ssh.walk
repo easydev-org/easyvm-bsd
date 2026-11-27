@@ -211,20 +211,40 @@ step "run it"
 # it - and `em0` is the installer's own default hint, kept second because the hint is the only other
 # name with any evidence behind it. A name that does not exist makes `dhclient` print one line and exit,
 # which is why trying three is cheap and trying none is what this stage has been paying for.
-step "try the candidate interface names with dhclient"
-  input text "for i in vio0 em0 re0; do dhclient $i 2>&1; done"
+# `dhclient` IS GIVEN `-b` SO IT DOES NOT BLOCK THE CONSOLE, AND EVERY REAL INTERFACE IS TRIED.
+#
+# MEASURED on run 46043440741, the first run whose disk was complete (the boot log reads `Automatic boot
+# in progress` and `MARKING FILE SYSTEM CLEAN`, not `Read-only file system`). It reached
+# `wait for sshd` and the host still read `ip neigh: 172.30.0.2 FAILED`, so the lease never arrived:
+#
+#	for i in vio0 em0 re0; do dhclient $i 2>&1; done
+#
+# `dhclient` WITHOUT `-b` SITS IN THE FOREGROUND WAITING FOR A LEASE - on an interface with a cable its
+# own default is ten seconds of silence, and on the wrong name it prints one line and exits. Three names
+# in one line therefore spend their three waits SERIALLY, and the console shows a prompt only after all
+# of them. `-b` returns at once and the daemon keeps trying in the background, which is what the boot
+# path itself does.
+#
+# AND THE LIST IS THE INTERFACES THE KERNEL ACTUALLY HAS, not three guesses: `ifconfig -l` is what names
+# this guest's card, and every name it prints except `lo0` is given a lease attempt.
+step "give every real interface a dhclient, in the background"
+  input text "ifconfig -l | tr ' ' '\\n' | grep -v lo0 > /tmp/ifs"
   settle 3
 
 
 step "run it"
   input ret
-  settle 30
+  settle 4
+
+
+step "start a dhclient on each, in the background"
+  input text "while read i; do dhclient -b $i; done < /tmp/ifs; echo DHCP_STARTED"
 
 
 # THE BOOT-TIME FILE IS WRITTEN FOR WHICHEVER INTERFACE THE LEASE ARRIVED ON, so the address survives
 # the reboot this stage performs at the end.
 step "record the interface that took the lease"
-  input text "for i in vio0 em0 re0; do echo dhcp > /etc/hostname.$i; done"
+  input text "while read i; do echo dhcp > /etc/hostname.$i; done < /tmp/ifs; ls /etc/hostname.*"
   settle 3
 
 
