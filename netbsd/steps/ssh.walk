@@ -52,14 +52,26 @@ step "boot the published disk"
 # at 0 on a disk that plainly reaches `Login:` on screen. So every gate in this file reads the
 # FRAMEBUFFER, and each attempt presses Return first, because a framebuffer that has not been poked
 # keeps showing whatever the kernel last drew on it.
+# NOTHING IS PRESSED HERE, AND THAT IS THE CORRECTION OF A REAL FAILURE.
+#
+# MEASURED on run 46020002282: this gate pressed Return on every attempt "to wake the framebuffer", and
+# the screen showed why that is wrong -
+#
+#	see: 7 word(s): Welcome to 1 oi: | BSD m          <- the login prompt, with no name typed
+#	see: 7 word(s): Welcome to 1 Password: || BSD h   <- THE SAME PROMPT, WITH AN EMPTY LINE SENT
+#
+# A Return AT `Login:` IS AN EMPTY USERNAME, so the guest moves to `Password:` and the gate's own word
+# `login` is gone from the screen for good. The loop then ran its full sixty attempts against a screen
+# this stage had pushed past the answer.
+#
+# AND NO WAKE IS NEEDED HERE, measured too: `netbsd/steps/smoke.walk` reads THIS guest's prompt without
+# pressing anything, and got `Login: BSD ...` on the first read. The banner this walk was worried about
+# is a habit from guests whose consoles hold the kernel's last line; theirs do not.
 step "the console login prompt is up"
   repeat
     do
-      item "wake the framebuffer, which otherwise keeps the boot banner"
-        input ret
-        settle 3
       item
-        settle 4
+        settle 5
       item "read the screen"
         read
           name login
