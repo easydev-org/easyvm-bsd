@@ -55,14 +55,24 @@ step "boot the disk"
 #
 # `doas` WOULD HAVE BEEN A GUESS: it has no `/etc/doas.conf` on a default install, and `vmuser` is
 # not necessarily in `wheel`. The console asks nothing of either.
+# NOTHING IS PRESSED AT THE PROMPT, AND THE WORDS ARE NARROWED TO ONE.
+#
+# TWO MISTAKES WERE MEASURED HERE ON run 46027393950:
+#
+# 1. THE WAKE PRESSED RETURN. AT `login:` A RETURN IS AN EMPTY USERNAME, which moves the guest to
+#    `Password:` - so the name this walk then typed went in as the password. openbsd has the same trap
+#    netbsd's stage paid for.
+#
+# 2. THE GATE ACCEPTED `openbsd`, WHICH IS THE HOSTNAME, NOT THE PROMPT. The boot's own last lines carry
+#    `openbsd.none` (the installer's `dns domain none` answer), so a frame from before the prompt could
+#    satisfy it. Only `login` says the prompt is up.
+#
+# `smoke.walk` on this same disk reads the prompt with no input at all, so no wake is needed.
 step "wait for the console login prompt"
   repeat
     do
-      item "wake the framebuffer, which otherwise keeps the boot banner"
-        input ret
-        settle 3
       item
-        settle 4
+        settle 8
       item "read the screen"
         read
           name login
@@ -72,11 +82,11 @@ step "wait for the console login prompt"
       mode text
       rect [0, 0, 1920, 1080]
       rect_at [1920, 1080]
-      words [[login], [openbsd]]
+      words [[login]]
     max 40
 
 
-step "log in at the console as root, which has no password on this disk"
+step "log in at the console as root"
   input text "root"
   settle 2
 
