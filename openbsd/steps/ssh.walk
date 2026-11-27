@@ -101,42 +101,36 @@ step "boot the disk"
 # SO THE DISK NOW CARRIES `set tty fb0` (see install.walk) and this file reads the FRAMEBUFFER again -
 # with the framebuffer's own font, which is what the `fb0` choice buys over the VGA text cells that OCR
 # has been misreading as `Qnon?` and `Losin`.
-# THE GATE ASKS FOR `ttyC0`, NOT FOR `login`, AND THAT IS THE BUG THIS STAGE KEPT HITTING.
+# THE FRAMEBUFFER FREEZES IN fsck, SO THIS STAGE READS THE SERIAL LINE AND WRITES TO THE KEYBOARD.
 #
-# MEASURED on run 46054365071, whose third attempt reported
+# MEASURED over runs 46054365071 and 46059253417, both of which stalled on the same frame:
 #
-#	see: 179 word(s): /dev/sd0h (...): MARKING FILE SYSTEM CLEAN /dev/sd0k ...
-#	the console login prompt is up [until]: __until__ = true (read "login")
-#	repeat: satisfied after 3 attempt(s)
+#	see: 176 word(s): /dev/sd0h (...): MARKING FILE SYSTEM CLEAN /dev/sd0k ...
 #
-# THE FRAME THAT SATISFIED IT WAS STILL IN fsck. There is no prompt on it - the word `login` was matched
-# out of the device paths and filenames the check prints. Everything after that step then typed at a
-# screen that was still booting, and by the time the real prompt arrived the console had stopped
-# refreshing and the `SHELL_OK` gate read one frozen frame thirty times.
+# SIXTY READS, and in the second run the whole step produced THREE DISTINCT FRAME HASHES - the picture
+# stopped changing while the file systems were still being checked. In the first run a `login` gate had
+# even been satisfied BY THAT FRAME, because `login` appears inside the device paths it prints.
 #
-# `ttyC0` IS THE WORD ONLY A REAL PROMPT CARRIES: OpenBSD prints
+# MEANWHILE THE SERIAL LINE CARRIES THE WHOLE BOOT. Run 46051395300's console.log held every line
+# through `starting local daemons: cron` and then
 #
-#	OpenBSD/amd64 (openbsd.none) (ttyC0)
-#	Login:
+#	OpenBSD/amd64 (openbsd.none) (tty00)
+#	login:
 #
-# immediately above the prompt, and nothing in fsck, in `MARKING FILE SYSTEM CLEAN`, or in a device path
-# contains it. The gate now waits for that.
-step "the console login prompt is up"
-  repeat
-    do
-      item
-        settle 8
-      item "read the screen"
-        read
-          name login
-    until
-      bind up
-      source login
-      mode text
-      rect [0, 0, 3840, 2160]
-      rect_at [3840, 2160]
-      words [[ttyC0]]
-    max 60
+# in thirty-one seconds. THE SERIAL CHANNEL WORKS; THE PICTURE IS WHAT FAILS.
+#
+# AND `input text` STILL REACHES THE GUEST, because it is a PS/2 keyboard event and the kernel console
+# is `pc0`. So the two halves are split deliberately:
+#
+#	TYPE at the VGA console      the keys land, whether or not the picture updates
+#	READ from /dev/tty00         every command ends with `> /dev/tty00`, so its answer is a file line
+#
+# `tty00` HAS A GETTY OF ITS OWN (install.walk enables it in /etc/ttys), so `login:` is printed there too
+# - which is what this first gate waits for.
+step "the serial line shows a login prompt"
+  until "login:"
+  from console
+  timeout 600
 
 
 step "log in at the console as root"
@@ -162,7 +156,7 @@ step "enter it"
 # THE SHELL IS PROVED BY A COMMAND, NOT BY A PROMPT CHARACTER. `#` is what root's prompt is and OCR
 # drops it; so the shell is asked to say a word, and the word is what the gate waits for.
 step "the console is a shell"
-  input text "echo SHELL_OK"
+  input text "echo SHELL_OK > /dev/tty00"
   settle 2
 
 
@@ -171,29 +165,11 @@ step "run it"
   settle 5
 
 
-# THE SCREEN IS POKED BEFORE EACH READ, BECAUSE A STILL FRAME IS A STALE ONE.
-#
-# MEASURED on run 46054365071: this gate read THIRTY FRAMES AND GOT ONE HASH -
-# `library: sh -> 3cc15fbcf93fd2e4` thirty times. The console had stopped refreshing, so no amount of
-# waiting would have changed what it showed. Pressing Return makes the shell redraw its prompt, which is
-# a write to the console and is what re-arms the framebuffer.
-step "it answered"
-  repeat
-    do
-      item "poke the console so it redraws"
-        input ret
-        settle 3
-      item "read the screen"
-        read
-          name sh
-    until
-      bind up
-      source sh
-      mode text
-      rect [0, 0, 3840, 2160]
-      rect_at [3840, 2160]
-      words [[SHELL_OK]]
-    max 40
+# THE ANSWER IS A LINE IN THE SERIAL FILE, NOT A WORD ON A FROZEN PICTURE.
+step "it answered on the serial line"
+  until "SHELL_OK"
+  from console
+  timeout 180
 
 
 # XENODM IS STOPPED BEFORE ANYTHING ELSE, BECAUSE IT TAKES THE SCREEN AND THE TTY OUT FROM UNDER US.
@@ -276,13 +252,13 @@ step "run it"
 
 
 step "start a dhclient on each, in the background"
-  input text "while read i; do dhclient -b $i; done < /tmp/ifs; echo DHCP_STARTED"
+  input text "while read i; do dhclient -b $i; done < /tmp/ifs; echo DHCP_STARTED> /dev/tty00"
 
 
 # THE BOOT-TIME FILE IS WRITTEN FOR WHICHEVER INTERFACE THE LEASE ARRIVED ON, so the address survives
 # the reboot this stage performs at the end.
 step "record the interface that took the lease"
-  input text "while read i; do echo dhcp > /etc/hostname.$i; done < /tmp/ifs; ls /etc/hostname.*"
+  input text "while read i; do echo dhcp > /etc/hostname.$i; done < /tmp/ifs; ls /etc/hostname.* > /dev/tty00"
   settle 3
 
 
