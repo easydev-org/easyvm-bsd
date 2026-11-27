@@ -87,9 +87,9 @@ step "the boot loader started the installed file system"
       bind at_boot
       source boot
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      scale 2
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      scale 1
       # `Losin` IS WHAT OCR MAKES OF `Login` ON THIS SCREEN - MEASURED, `see: 4 word(s): Losin | BSD h`
       # - so the loader gate asks for `BSD`, which survives the same read intact.
       words [[BSD], [bsd]]
@@ -108,9 +108,9 @@ step "the console login prompt is up"
       bind up
       source login
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      scale 2
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      scale 1
       # `login` IS WHAT THE PROMPT SAYS AND `Losin` IS WHAT OCR MAKES OF IT.
       #
       # MEASURED on run 46021818421, whose every frame read:
@@ -160,9 +160,9 @@ step "the shell is a root prompt"
       bind up
       source sh
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      scale 2
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      scale 1
       # THE SHELL PROMPT IS A SINGLE `#` AND OCR IS UNRELIABLE ON THIS SCREEN, so the gate asks for
       # the absence of the login prompt instead: a `Psassword`/`Password` line means the name was not
       # accepted, and anything else means the shell is up.
@@ -275,9 +275,9 @@ step "the console reports the address"
       bind up
       source addr
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      scale 2
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      scale 1
       words [[inet, 172.30]]
     max 20
 
@@ -346,9 +346,9 @@ step "the display manager replaced the text console"
       bind up
       source desk
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      scale 2
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      scale 1
       without [[login], [root@]]
     max 40
 
