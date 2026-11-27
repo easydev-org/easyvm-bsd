@@ -89,6 +89,29 @@ step "the empty password the installer never set"
   settle 8
 
 
+# XENODM IS STOPPED BEFORE ANYTHING ELSE, BECAUSE IT TAKES THE SCREEN AND THE TTY OUT FROM UNDER US.
+#
+# MEASURED on runs 46017870176, 46019950845 and 46021264187: the console is a root shell for a moment -
+# the screen reads `openbsd.none` and a prompt - and then becomes the X server's stipple:
+#
+#	see: 70 word(s): =~ —rr—“_—Cr"TC(*RREREREERERRNC:CiCi*=*i*tiw*siw*=swi‘;S,COCO...
+#
+# which is a graphical session, not a shell. Every command typed after that went to a display manager
+# that ignores it, which is why `dhclient` never ran however many candidate names it was given.
+#
+# THE FIX IS TO TURN XENODM OFF FROM THE ROOT SHELL WHILE IT IS STILL ONE: `rcctl disable` makes the
+# setting persist, `rcctl stop` ends the session that is up. The desktop is then STARTED DELIBERATELY at
+# the end of this stage, where the greeter gates are, instead of racing this stage for the console.
+step "stop xenodm, which takes the console away"
+  input text "rcctl disable xenodm; rcctl stop xenodm"
+  settle 3
+
+
+step "run it"
+  input ret
+  settle 10
+
+
 # THE INTERFACE'S NAME IS ASKED FOR, NOT ASSUMED, AND THAT IS A CORRECTION.
 #
 # The installer's own prompt offers `em0` as its DEFAULT - that is the hint it prints, not a
@@ -170,6 +193,13 @@ step "the account's session is cwm, on the booted disk"
 # cwm IS IN xbase AND THIS IS THE FILE ITSELF, not the package manager's record of it.
 step "cwm is in the base system"
   ssh "ls -l /usr/X11R6/bin/cwm"
+
+# XENODM IS TURNED BACK ON HERE - this stage stopped it at the start so its own console work would not
+# be taken away, and the desktop gates below are what turn it on for.
+step "turn xenodm back on and start it"
+  ssh "rcctl enable xenodm; rcctl start xenodm; echo XENODM_STARTED"
+  timeout 120
+
 
 step "xenodm is enabled, which is what starts that session"
   ssh "sysrc -n xenodm 2>/dev/null; grep -c 'xenodm' /etc/rc.conf.local /etc/rc.conf 2>/dev/null | grep -v ':0'"
