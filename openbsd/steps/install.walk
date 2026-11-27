@@ -526,7 +526,7 @@ step "prove the new system is mounted before writing to it"
 step "grant the account doas, with no password"
   do
     item
-      input text "echo permit persist :{{ user }} > /mnt/etc/doas.conf && cat /mnt/etc/doas.conf"
+      input text "echo permit nopass :{{ user }} > /mnt/etc/doas.conf; cat /mnt/etc/doas.conf"
     item
       input ret
       settle 6
