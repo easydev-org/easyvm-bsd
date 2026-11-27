@@ -89,22 +89,20 @@ step "boot the disk"
 #    satisfy it. Only `login` says the prompt is up.
 #
 # `smoke.walk` on this same disk reads the prompt with no input at all, so no wake is needed.
-step "wait for the console login prompt"
-  repeat
-    do
-      item
-        settle 8
-      item "read the screen"
-        read
-          name login
-    until
-      bind up
-      source login
-      mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      words [[login]]
-    max 40
+# THE LOGIN PROMPT IS READ FROM THE SERIAL FILE, NOT FROM A PICTURE OF IT.
+#
+# MEASURED over eight runs: the VGA channel stops advancing at the boot log -
+#
+#	see: 150 word(s): starting RPC daemons: . savecore: no core dump checking quotas: done. clearing ...
+#
+# - one run's gate was even satisfied by noise in that text while the screen showed no prompt at all.
+# AND `openbsd/steps/install.walk` NOW ANSWERS THE INSTALLER'S `serial console?` WITH `yes`, which writes
+# `/etc/boot.conf` with `set tty com0` on the published disk. So the console is a FILE the engine already
+# writes, exactly as it is on smartos and omnios, and `until ... from console` reads it without OCR.
+step "the console login prompt is in the serial file"
+  until "login:"
+  from console
+  timeout 600
 
 
 step "log in at the console as root"
@@ -139,23 +137,10 @@ step "run it"
   settle 5
 
 
-step "it answered"
-  repeat
-    do
-      item
-        settle 4
-      item "read the screen"
-        read
-          name sh
-    until
-      bind up
-      source sh
-      mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      scale 1
-      words [[SHELL_OK]]
-    max 30
+step "it answered, in the serial file"
+  until "SHELL_OK"
+  from console
+  timeout 120
 
 
 # XENODM IS STOPPED BEFORE ANYTHING ELSE, BECAUSE IT TAKES THE SCREEN AND THE TTY OUT FROM UNDER US.

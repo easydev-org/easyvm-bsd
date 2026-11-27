@@ -229,9 +229,27 @@ step "xenodm - yes, which is the graphical login"
       input ret
       settle 4
 
-step "serial console - the default is no"
-  input ret
-  settle 4
+# THE SERIAL CONSOLE IS ANSWERED `yes`, AND THAT IS WHAT MAKES THE NEXT STAGE READABLE.
+#
+# MEASURED over eight runs: with `no`, this disk's ONLY console is the VGA framebuffer, and every ssh
+# stage has had to OCR it. On run 46046031356 the frames stopped at
+#
+#	see: 150 word(s): starting RPC daemons: . savecore: no core dump checking quotas: done. clearing ...
+#
+# and never advanced to `login:` - the boot log was the last thing this reader ever saw, and a gate that
+# looked for its own marker was satisfied by noise in that text. The framebuffer is a poor channel for a
+# text console, and no amount of rectangle-tuning fixes an OCR that is reading a kernel's scrollback.
+#
+# `yes` HERE MAKES THE INSTALLER WRITE `/etc/boot.conf` WITH `set tty com0`, so the booted system puts
+# its console on the SERIAL LINE - which is `console.log`, the file the engine already writes and
+# `until ... from console` already reads. It is the channel smartos and omnios use for the same reason.
+step "serial console - yes, so the console is a file rather than a picture"
+  do
+    item
+      input text "yes"
+    item
+      input ret
+      settle 4
 
 step "the account"
   do
