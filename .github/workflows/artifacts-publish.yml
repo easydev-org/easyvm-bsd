@@ -59,7 +59,6 @@ jobs:
           # `mirror-one.sh` picks the algorithm from the hash's LENGTH, so a 128-character pin is
           # checked as sha512 and a 64-character one as sha256, with no extra field to disagree.
           - { tag: "iso-ghostbsd", group: "bsd", url: "https://download.ghostbsd.org/releases/amd64/26.3.R15.1p6/GhostBSD-26.3.R15.1p6.iso", sha: "2d1b46e7d0d9339ef04d2ee386783a2431f43eecb873b8f11b7109a43c577f7f", size: "4122404864" }
-          - { tag: "iso-midnightbsd", group: "bsd", url: "https://discovery.midnightbsd.org/ftp/releases/amd64/ISO-IMAGES/4.0.9/MidnightBSD-4.0.9--amd64-disc1.iso", sha: "7e0bee661443a0559a02b3c654f5475296616a059d34571e8715cc8fa2c6677b", size: "1081038848" }
           - { tag: "iso-netbsd", group: "bsd", url: "https://cdn.netbsd.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-amd64.iso", sha: "1253d45638afe243b09718a3573597693d5c1bc086ae5618f863148dd2b2b9afdf57557231fd8404e34d17612d1d3a1e4be17d2adb426dfb70e98ebf0bbfcc0c", size: "692914176" }
           - { tag: "iso-openbsd", group: "bsd", url: "https://cdn.openbsd.org/pub/OpenBSD/7.8/amd64/install78.iso", sha: "a228d0a1ef558b4d9ec84c698f0d3ffd13cd38c64149487cba0f1ad873be07b2", size: "811106304" }
     # NO `if:` HERE, AND THAT IS NOT AN OVERSIGHT: A JOB-LEVEL `if:` CANNOT SEE `matrix`.
