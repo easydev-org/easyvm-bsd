@@ -281,7 +281,7 @@ step "run it"
 # 172.30.0.2 IS THE ADDRESS EVERY OTHER GUEST HERE USES - the tap is , the host's own
 # diagnosis in this very log says , and the illumos stages write this value.
 step "give the interface the address this cluster uses"
-  input text "while read i; do ifconfig $i inet 172.30.0.2/24; done < /tmp/ifs"
+  input text "while read i; do ifconfig $i 172.30.0.2 netmask 255.255.255.0; done < /tmp/ifs"
   settle 3
 
 
