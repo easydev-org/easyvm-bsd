@@ -28,6 +28,117 @@ step "boot the disk"
     args [["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
     timeout 900
 
+# THE NETWORK IS CONFIGURED BEFORE `machine_ssh` IS ASKED, BECAUSE THIS WALK USED TO DEADLOCK ON IT.
+#
+# THE MEASUREMENT. This file's first version waited for `machine_ssh` at step 2 and only configured
+# the interface at step 5 - over ssh. Run 46017440375 sat at "step 2/15 wait for sshd" for twelve
+# minutes and never moved, because:
+#
+#	the INSTALL walk answers every network question with `none`
+#	    -> the booted disk has no address
+#	    -> sshd is running but unreachable
+#	    -> `machine_ssh` can never hold
+#	    -> the step that would configure the address is behind it
+#
+# `machine_ssh` IS THE LAST QUESTION, NOT THE FIRST. So the address comes from the CONSOLE, which is
+# this guest's framebuffer - the install walk answered `serial console? no`, so the serial file carries
+# only firmware lines and the shell is on the VGA screen.
+#
+# THE CONSOLE IS TAKEN AS ROOT, BECAUSE ROOT IS THE ONLY ACCOUNT THAT CAN CHANGE THE INTERFACE, AND
+# THE INSTALL WALK LEFT ROOT WITH NO PASSWORD.
+#
+# `Allow root ssh login? [no]` is about SSH and is untouched - ssh is still `vmuser`, which is what
+# this file's `user` line says. THIS IS THE CONSOLE, where root has no password on a fresh OpenBSD
+# install (the installer never asked for one), so `root` plus Return is admitted.
+#
+# `doas` WOULD HAVE BEEN A GUESS: it has no `/etc/doas.conf` on a default install, and `vmuser` is
+# not necessarily in `wheel`. The console asks nothing of either.
+step "wait for the console login prompt"
+  repeat
+    do
+      item "wake the framebuffer, which otherwise keeps the boot banner"
+        input ret
+        settle 3
+      item
+        settle 4
+      item "read the screen"
+        read
+          name login
+    until
+      bind up
+      source login
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      words [[login], [openbsd]]
+    max 40
+
+
+step "log in at the console as root, which has no password on this disk"
+  input text "root"
+  settle 2
+
+
+step "take the name"
+  input ret
+  settle 5
+
+
+step "the empty password the installer never set"
+  input ret
+  settle 8
+
+
+# THE INTERFACE IS `em0` - the install walk typed that name at the installer's own prompt, and it is
+# the driver this virtio-net card binds to. `dhcp` IS A LINE IN `/etc/hostname.em0`, so the address
+# survives the reboot this stage performs at the end and the next boot comes up reachable.
+#
+# The file write and the interface bring-up are separate steps, so a failure names which half broke.
+step "write dhcp into the interface's own file, so the lease survives the reboot"
+  input text "echo dhcp > /etc/hostname.em0"
+  settle 3
+
+
+step "run it"
+  input ret
+  settle 5
+
+
+step "bring the interface up with a lease"
+  input text "ifconfig em0 up; dhclient em0"
+  settle 3
+
+
+step "run it"
+  input ret
+  settle 20
+
+
+step "the console reports the address"
+  repeat
+    do
+      item "wake the console"
+        input ret
+        settle 2
+      item "ask for the address"
+        input text "ifconfig em0 | grep inet"
+        settle 2
+      item
+        input ret
+        settle 5
+      item "read it"
+        read
+          name addr
+    until
+      bind up
+      source addr
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      words [[inet, 172.30]]
+    max 20
+
+
 step "wait for sshd"
   repeat
     until machine_ssh
