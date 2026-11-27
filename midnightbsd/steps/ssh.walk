@@ -1,8 +1,8 @@
-# midnightbsd 4.0.9 - the installed system, over ssh, with the desktop it ships as a package.
+# midnightbsd 4.0.9 - the installed system, over ssh, with the desktop this release is built around.
 #
 # THE INSTALL WALK PROVES THE INSTALLER ANSWERED EVERY QUESTION. This one proves the machine that
 # came out of it can reach a package mirror and install the desktop MidnightBSD has been built around
-# since 2021 - Xfce - and that the session actually comes up on screen.
+# since 2021 - Xfce - and that a session actually comes up on screen.
 #
 # WHY THE DESKTOP IS HERE AND NOT IN THE INSTALL, WHICH IS WHERE freebsd PUTS IT.
 #
@@ -18,24 +18,33 @@
 # install leg publishes is a complete base system with an empty `/usr/local` - not a desktop with
 # something missing.
 #
-# THAT IS MIDNIGHTBSD'S OWN DESIGN, not an omission here. Its documentation says so plainly:
+# THAT IS MIDNIGHTBSD'S OWN DESIGN, and the mechanism is a file, not a manual step. `etc/rc.d/firstboot`
+# from `base.txz`, read out here:
 #
-#	"When you first install MidnightBSD, a script called firstboot ... will ask if you would like to
-#	 install a graphical desktop environment. This will allow you to select xfce or WindowMaker."
-#	       -- https://www.midnightbsd.org/documentation/desktop.html
+#	receipt="/etc/fbreceipt"
+#	if [ ! -f ${receipt} ]; then
+#	        echo -e "...MidnightBSD FirstBoot Configuration"
+#	        echo "This utility requires an active Internet connection."
+#	        ...  "Do you wish to enable a graphical environment? (yes or no)"
+#	        ...  /usr/sbin/mport install midnightbsd-desktop
+#	        ...  /usr/sbin/sysrc mlogind_enable=YES
+#	        ...  /usr/sbin/sysrc dbus_enable=YES
+#	        ...  set_default_session ${session}
+#	        touch ${receipt}
+#	fi
 #
-# and 4.0's release notes name Xfce as the desktop the project builds ("We switched ... to Xfce as
-# our desktop environment", midnightbsd.org/about). The packages are not on the disc; they come from
-# the project's mirror. A package install is a network operation, so it belongs to the stage that has
-# a booted system with an interface and a resolver - this one.
+# So the disc ships a script that will install the desktop on FIRST BOOT, from the project's mirror.
+# MEASURED on the published disk: it runs and holds the console at
 #
-# XFCE SPECIFICALLY, BECAUSE IT IS THE PROJECT'S OWN:
+#	MidnightBSD FirstBoot Configuration
+#	Set your preferred package mirror? (us.uk, jp)
 #
-#	"Install Xfce with mport install xfce4"
-#	       -- https://www.midnightbsd.org/documentation/desktop.html
+# which is why an ssh leg that just waits for sshd times out - the wizard owns the console, and every
+# answer it wants is one this walk cannot read with OCR (the model returns `dpstalb)` for its panes).
 #
-# and 2.1 and later ship a default `.xinitrc` that starts Xfce when it is installed, so the session
-# file this walk writes is the explicit form of what the release already intends.
+# SO THIS STAGE DOES WHAT THAT SCRIPT DOES, ON PURPOSE AND IN THE OPEN, and then writes the receipt so
+# the wizard never runs again. The package list is copied from the script rather than invented:
+# `midnightbsd-desktop` is the meta-package that provides Xorg, mlogind and Xfce in one install.
 walkthrough "midnightbsd 4.0.9 - sshd, Xfce, and a desktop"
 resolution 1920x1080
 recording_resolution 1920x1080
@@ -58,31 +67,35 @@ step "boot the disk"
     args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
     timeout 900
 
-# THE FIRST BOOT LANDS ON THE PROJECT'S OWN WIZARD, AND IT MUST BE LET PAST RATHER THAN ANSWERED.
+# THE WIZARD IS ANSWERED, NOT AVOIDED. It is the one thing on this console that owns it before sshd
+# gets a turn, and its panes are the ones that OCR cannot read.
 #
-# MEASURED on a disk this repository published, booted with no medium:
+# MEASURED, its questions in order and the answer that stops it doing anything:
 #
-#	Mounting late filesystems:
-#	Starting aged.
-#	MidnightBSD FirstBoot Configuration
-#	This utility requires an active Internet connection.
-#	Set your preferred package mirror? (us.uk, jp)
+#	Set your preferred package mirror? (us.uk, jp)      -> RETURN (takes the default)
+#	Would you like to report your install via bsdstats? -> no
+#	Would you like to report your install via hw-probe? -> no
+#	Would you like to install Ravenports? (yes or no)   -> no
+#	Do you wish to enable a graphical environment?       -> no   (THIS STAGE installs it explicitly)
 #
-# `firstboot` is the script MidnightBSD's documentation describes, and it will offer to install the
-# desktop itself. This walk does that part explicitly further down - a walk that reads its own
-# evidence is worth more than one that trusts a wizard's exit status - so the wizard is walked
-# through with its defaults, which is RETURN at every prompt, and `no` where it asks to report the
-# installation to bsdstats.
-#
-# IT IS ALSO WHY SSH IS NOT IMMEDIATELY UP: sshd starts, but firstboot owns the console until it
-# finishes. The wait below is long for that reason.
-step "walk the firstboot wizard with its defaults"
+# The last one is `no` and that is deliberate: the wizard's own install path cannot be observed - it
+# runs `mport install midnightbsd-desktop` and then a stack of GPU questions - and a walk that cannot
+# see what happened cannot claim it did. This file installs the same package with a command whose
+# exit status it can read.
+step "answer the firstboot wizard and stop it installing anything"
   do
     item
-      settle 45
+      settle 50
     item
       input ret
       settle 20
+    item
+      input text "no"
+    item
+      input ret
+      settle 15
+    item
+      input text "no"
     item
       input ret
       settle 15
@@ -95,7 +108,7 @@ step "walk the firstboot wizard with its defaults"
       input text "no"
     item
       input ret
-      settle 20
+      settle 30
 
 step "wait for sshd"
   repeat
@@ -109,10 +122,9 @@ step "prove the kernel over ssh"
 step "prove the account over ssh"
   ssh "id -un"
 
-# THE MACHINE THE INSTALLER WROTE HAS NO NETWORK CONFIGURATION OF ITS OWN, WHICH IS THE SAME THING
-# freebsd HAD TO SOLVE: bsdinstall's network menu configures the INSTALLER's runtime, and what it
-# wrote into the disk is only the interface name. The interface is brought up here, and DHCP is what
-# the tap behind this guest serves.
+# THE MACHINE THE INSTALLER WROTE HAS NO NETWORK CONFIGURATION OF ITS OWN, which is the same thing
+# freebsd's leg had to solve: bsdinstall's network menu configures the INSTALLER's runtime. The
+# interface is brought up here, and DHCP is what the tap behind this guest serves.
 step "report the interfaces the booted system has"
   ssh "ifconfig -a | head -30"
   timeout 120
@@ -125,24 +137,38 @@ step "prove the address"
   ssh "ifconfig vtnet0 | grep 'inet '"
   timeout 120
 
-# A BOOTED SYSTEM HAS NO RESOLVER; THE ONE THE WALK WROTE INTO THE CHROOT DURING THE INSTALL IS GONE
-# BY THE TIME THIS DISK BOOTS.
+# A BOOTED SYSTEM HAS NO RESOLVER; the one written into the chroot during the install does not
+# survive into this boot.
 step "give the booted system a resolver"
   ssh "sudo sh -c 'printf \"%s\n\" \"nameserver 172.30.0.1\" \"nameserver 1.1.1.1\" > /etc/resolv.conf'; cat /etc/resolv.conf"
   timeout 120
 
-step "prove the mirror is reachable, which is the only thing that makes the install possible"
-  ssh "sudo env ASSUME_ALWAYS_YES=yes mport index 2>&1 | tail -5"
-  timeout 1200
-
-step "install xorg and xfce, which is the desktop this release names as its own"
-  ssh "sudo mport install -A -M xorg xfce4 2>&1 | tail -40"
-  timeout 7200
-
-step "prove xfce is installed"
-  ssh "ls -l /usr/local/bin/startxfce4 /usr/local/bin/xfce4-session /usr/local/share/xsessions/xfce.desktop 2>&1"
+step "point the package manager at the mirror the wizard would have chosen"
+  ssh "sudo mport config set mirror_region us 2>&1; sudo mport config get mirror_region 2>&1"
   timeout 180
 
+step "index the mirror, which is the only thing that makes an install possible"
+  ssh "sudo mport index 2>&1 | tail -5"
+  timeout 1800
+
+# `midnightbsd-desktop` AND NOT `xorg xfce4` SEPARATELY: the wizard's own script installs this one
+# name, and its comment says what it is - "midnightbsd-desktop provides Xorg, mlogind and xfce". It is
+# the release's own definition of a desktop, so this stage installs that rather than a list assembled
+# here.
+step "install midnightbsd-desktop, the release's own meta-package for Xorg, mlogind and Xfce"
+  ssh "sudo env ASSUME_ALWAYS_YES=yes mport install -A -M midnightbsd-desktop 2>&1 | tail -40"
+  timeout 7200
+
+step "prove the desktop's files are on disk, not just its package record"
+  ssh "ls -l /usr/local/bin/Xorg /usr/local/bin/startxfce4 /usr/local/bin/xfce4-session /usr/local/sbin/mlogind 2>&1"
+  timeout 180
+
+step "prove xfce's session file exists, which is what a login manager lists"
+  ssh "ls -l /usr/local/share/xsessions/ 2>&1"
+  timeout 120
+
+# THE SESSION FILE FOR THE ACCOUNT. MidnightBSD 2.1 and later ship a default `.xinitrc` that starts
+# Xfce when it is installed, but writing it explicitly is what a reader can check.
 step "give the account a session that starts xfce"
   ssh "printf '%s\n' '#!/bin/sh' 'exec /usr/local/bin/startxfce4' > ~/.xsession && chmod +x ~/.xsession && cat ~/.xsession"
   timeout 120
@@ -151,34 +177,36 @@ step "write the same session for the console, which is what startx reads"
   ssh "printf '%s\n' 'exec /usr/local/bin/startxfce4' > ~/.xinitrc && cat ~/.xinitrc"
   timeout 120
 
-# THE ACCOUNT NEEDS ITS PASSWORD HASH REPLACED WITH ONE PAM WILL ACCEPT. The installer's adduser
-# wrote a hash already, but this walk reads it back rather than assuming the pane landed on the
-# field it was aiming at - the same proof freebsd's ssh leg makes.
-step "prove the account's password is a hash and not a locked field"
-  ssh "sh -c 'grep \"^{{ user }}:\" /etc/master.passwd | cut -d: -f2 | cut -c1-3'"
-  timeout 120
+# THE TWO SERVICES THE WIZARD ENABLES, ENABLED HERE FOR THE SAME REASON: mlogind is the login manager
+# this release ships since 2.1, and dbus is what an Xfce session needs to start at all.
+step "enable the login manager and dbus at boot"
+  ssh "sudo sh -c 'sysrc mlogind_enable=YES dbus_enable=YES; sysrc -a | grep -E \"mlogind|dbus\"'"
+  timeout 180
 
 step "let the account escalate without a password, which is what the session needs"
   ssh "sudo sh -c 'printf \"%s\n\" \"{{ user }} ALL=(ALL) NOPASSWD:ALL\" > /usr/local/etc/sudoers.d/90-{{ user }}\"; sudo chmod 0440 /usr/local/etc/sudoers.d/90-{{ user }}; sudo cat /usr/local/etc/sudoers.d/90-{{ user }}'"
   timeout 180
 
-# THE DISPLAY MANAGER IS WHAT THIS STAGE IS FOR, SO IT IS ASKED TO START RATHER THAN LEFT TO THE
-# WIZARD. MidnightBSD's own login manager since 2.1 is mlogind; xdm is in the base system and is
-# started from /etc/ttys, which is the path this walk takes because it needs no package of its own.
-step "start xdm on the next boot, which is what gives the machine a graphical login"
-  ssh "sudo sh -c 'sed -i \"\" -e \"s|^ttyv8.*xdm.*|ttyv8\t\\\"/usr/local/bin/xdm -nodaemon\\\"\txterm\ton secure|\" /etc/ttys; grep -n ttyv8 /etc/ttys'"
-  timeout 180
+step "prove the account's password is a hash and not a locked field"
+  ssh "sh -c 'grep \"^{{ user }}:\" /etc/master.passwd | cut -d: -f2 | cut -c1-3'"
+  timeout 120
 
-step "tell xdm which session the account gets"
-  ssh "sudo sh -c 'mkdir -p /usr/local/lib/X11/xdm; ls /usr/local/lib/X11/xdm'"
+# THE RECEIPT. Writing it is what the wizard does at its own end (`touch ${receipt}`), and it is what
+# stops the wizard from ever running again on this disk.
+step "write firstboot's receipt, so the wizard never runs on this disk again"
+  ssh "sudo touch /etc/fbreceipt; ls -l /etc/fbreceipt"
   timeout 120
 
 step "flush the writes before the session starts"
   ssh "sudo sync"
   timeout 300
 
+step "start the session, because a login manager only draws after it has been started once"
+  ssh "sudo service mlogind restart 2>&1 | tail -5; sleep 20; pgrep -x mlogind && echo MLOGIND_UP"
+  timeout 600
+
 # THE PICTURE IS THE CLAIM. A machine that installed Xfce and then cannot draw it is not a desktop,
-# and the installer's own output cannot tell the two apart.
+# and a package's exit status cannot tell the two apart.
 step "the xfce session is drawing on screen"
   repeat
     do
@@ -193,9 +221,9 @@ step "the xfce session is drawing on screen"
       mode text
       rect [0, 0, 1920, 1080]
       rect_at [1920, 1080]
-      without [[login], [password]]
-      words [[xfce], [midnightbsd], [application], [desktop]]
-    max 40
+      without [[login], [password], [midnightbsd]]
+      words [[xfce], [application], [desktop], [settings], [session]]
+    max 60
 
 step "flush the writes before the machine stops"
   ssh "sudo sync"
