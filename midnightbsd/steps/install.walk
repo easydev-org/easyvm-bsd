@@ -955,9 +955,130 @@ step "reboot into the installed system, which unmounts first"
       input ret
       settle 40
 
-step "stop the machine"
+# THE INSTALLER'S `Reboot` RESTARTS INTO THE MEDIUM, WHICH IS STILL bootindex=0, SO THE MACHINE IS
+# NOT DONE - AND THAT IS THE OPPORTUNITY THIS WALK TAKES.
+#
+# MidnightBSD's own `etc/rc.d/firstboot` (read out of the disc's base.txz) installs the desktop on the
+# FIRST BOOT of the new system:
+#
+#	receipt="/etc/fbreceipt"
+#	if [ ! -f ${receipt} ]; then
+#	        "Do you wish to enable a graphical environment? (yes or no)"
+#	        /usr/sbin/mport install midnightbsd-desktop   # "provides Xorg, mlogind and xfce"
+#	        /usr/sbin/sysrc mlogind_enable=YES
+#	        /usr/sbin/sysrc dbus_enable=YES
+#	        touch ${receipt}
+#	fi
+#
+# So the disk is booted HERE, on its own, and the wizard is answered `yes` - the release's own path,
+# with the release's own package, rather than a list this repository would have to keep in step. That
+# is what makes this image a desktop at the install stage, like freebsd's.
+#
+# MEASURED, the answers the script reads, in its own order:
+#
+#	Set your preferred package mirror? (us.uk, jp)                  -> RETURN (default)
+#	Would you like to report your install via bsdstats?             -> no
+#	Would you like to report your install via hw-probe?             -> no
+#	Would you like to install Ravenports?                           -> no
+#	Do you wish to enable a graphical environment? (yes or no)       -> yes
+#	Which desktop would you like as the default? ...[xfce]           -> RETURN (xfce)
+#	Do you wish to install Intel or AMD GPU drivers? (yes or no)     -> no
+#	Do you wish to install nvidia GPU driver? (no, 340, 390, 470)    -> RETURN (no)
+#
+# The GPU questions are `no` on purpose: this guest has a std VGA adapter, which Xorg's own
+# `modesetting`/`scfb` driver drives; a DRM module for hardware that is not present would only add a
+# way for the session to fail.
+step "stop the installer before booting the disk on its own"
   stop "{{ shutdown }}"
   timeout 300
 
-step "publish the disk"
+step "boot the installed disk with no medium, because the medium still owns bootindex 0"
+  boot
+    machine "q35,accel=kvm,vmport=off"
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    timeout 900
+
+# THE WIZARD OWNS THE CONSOLE AND ITS PANES ARE THE ONES OCR CANNOT READ - MEASURED, `--psm 6` of its
+# frame returns `MidnightBSD Installer / dpstalb)` for the welcome pane and `MidnightBSD FirstBoot
+# Configuration` only sometimes. So the answers are SENT BLINDLY, in the script's own order, and the
+# gate below is the package being on disk rather than any pane being read.
+step "answer the firstboot wizard, taking its xfce desktop"
+  do
+    item
+      settle 60
+    # Mirror: RETURN takes the default region.
+    item
+      input ret
+      settle 20
+    # bsdstats: no
+    item
+      input text "no"
+    item
+      input ret
+      settle 15
+    # hw-probe: no
+    item
+      input text "no"
+    item
+      input ret
+      settle 15
+    # Ravenports: no
+    item
+      input text "no"
+    item
+      input ret
+      settle 15
+    # A GRAPHICAL ENVIRONMENT: YES. This is the whole point of the second boot.
+    item
+      input text "yes"
+    item
+      input ret
+      settle 20
+    # Which desktop: RETURN takes xfce, the default in the script's own `[xfce]` prompt.
+    item
+      input ret
+      settle 20
+    # Intel/AMD DRM: no.
+    item
+      input text "no"
+    item
+      input ret
+      settle 15
+    # nvidia: RETURN takes no.
+    item
+      input ret
+      settle 30
+
+# THE INSTALL ITSELF IS THE GATE, NOT THE PANES, AND THE SCREEN IS WHERE IT IS READ.
+#
+# MEASURED, `mport install midnightbsd-desktop` pulls Xorg, mlogind and Xfce and takes minutes on this
+# guest; the wizard then enables mlogind, which starts a GREETING SCREEN. So the gate is the machine
+# having got that far - a wizard answered wrong stops at a prompt long before any of this is drawn.
+#
+# `MidnightBSD FirstBoot Configuration` ON SCREEN IS NOT SUCCESS: that is the wizard still waiting for
+# an answer, and it is what an answer that landed on the wrong pane looks like. So the gate accepts
+# the login manager's own screen, which only exists after the packages are in.
+step "the desktop the wizard installed reached a login screen"
+  repeat
+    do
+      item
+        settle 20
+      item "read the screen"
+        read
+          name firstboot
+    until
+      bind desktop_landed
+      source firstboot
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      without [[firstboot, configuration], [set, your, preferred, package, mirror]]
+      words [[login], [username], [password], [midnightbsd], [welcome]]
+    max 60
+
+step "stop the machine after the wizard finishes"
+  stop "{{ shutdown }}"
+  timeout 300
+
+step "publish the disk, which is now a desktop"
     save "{{ out }}"
