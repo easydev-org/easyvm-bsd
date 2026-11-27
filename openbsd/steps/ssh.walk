@@ -331,7 +331,7 @@ step "run it"
 # line so a run that still has no address says WHICH of the two it is - no link, or a link and a bad
 # command.
 step "bring the interface up and report its carrier"
-  input text "I=$(cat /tmp/ifs); ifconfig $I up; ifconfig $I > /dev/tty00 2>&1"
+  input text "ifconfig -l > /dev/tty00 2>&1; ifconfig em0 up 2>&1"
   settle 3
 
 
@@ -341,7 +341,7 @@ step "run it"
 
 
 step "give the interface the address this cluster uses"
-  input text "I=$(cat /tmp/ifs); ifconfig $I inet 172.30.0.2 netmask 255.255.255.0"
+  input text "ifconfig em0 inet 172.30.0.2 netmask 255.255.255.0 2>&1"
   settle 3
 
 
@@ -351,7 +351,7 @@ step "run it"
 
 
 step "write the address into the boot-time file"
-  input text "I=$(cat /tmp/ifs); echo 172.30.0.2 > /etc/hostname.$I"
+  input text "echo 172.30.0.2 > /etc/hostname.em0"
   settle 2
 
 
