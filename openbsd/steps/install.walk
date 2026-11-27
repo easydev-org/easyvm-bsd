@@ -431,12 +431,19 @@ step "the root account gets one too"
 # over ssh, at the step whose gates judge the desktop. A console that stays a text console is what makes
 # the console steps possible at all.
 #
+# `xenodm=NO` IS THE SPELLING, AND `xenodm_flags=NO` IS NOT. MEASURED: an earlier version of this file
+# wrote `xenodm_flags=NO`, and the run after it (46036496798) still found X taking the console - the
+# frames stopped on the kernel's own `wsdisplay@ at efifb@ mux 1: console (std, vt100 emulation)` line
+# because the display manager started over it. OpenBSD's rc decides WHETHER to run a service from
+# `${name}=YES`, and `${name}_flags` only appends arguments to the command line. The flag version hands
+# the literal word `NO` to xenodm and starts it anyway.
+#
 # `rc.conf.local` IS THE RIGHT FILE, NOT `rc.conf`: OpenBSD's rc reads rc.conf first and rc.conf.local
 # after it, so a setting here wins without editing the file the release ships.
 step "publish the disk with xenodm off, so the console stays a console"
   do
     item
-      input text "echo xenodm_flags=NO > /mnt/etc/rc.conf.local && cat /mnt/etc/rc.conf.local"
+      input text "echo xenodm=NO > /mnt/etc/rc.conf.local && cat /mnt/etc/rc.conf.local"
     item
       input ret
       settle 6
