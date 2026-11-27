@@ -10,8 +10,8 @@
 # blue panel with a pufferfish), so "the grey root is on screen" is exactly the claim "the session
 # started", and it cannot be satisfied by a machine stuck at the greeter.
 walkthrough "openbsd 7.8 - sshd, cwm, and the desktop"
-resolution 1920x1080
-recording_resolution 1920x1080
+resolution 3840x2160
+recording_resolution 3840x2160
 user vmuser
 var out
   default out/openbsd-ssh.qcow2
@@ -22,31 +22,33 @@ var user
   from args.user
 ssh_port 2222
 
-# THE DISPLAY IS `virtio-vga`, AND THAT IS THE FIX FOR A 3840x2160 CONSOLE.
+# THE DISPLAY IS STANDARD `VGA`, AND THAT IS THE OPPOSITE OF WHAT AN EARLIER COMMIT CONCLUDED.
 #
-# MEASURED, side by side, in this cluster's own lab pod against THIS iso and THIS OVMF, same machine,
-# same memory, one device changed:
+# MEASURED IN THIS CLUSTER'S LAB POD, on the SAME published disk, one device changed, both screenshots
+# taken 120 seconds after boot and both read with tesseract:
 #
-#	-device VGA,xres=1920,yres=1080,vgamem_mb=32   ->  frame is 3840x2160
-#	-device virtio-vga,xres=1920,yres=1080         ->  frame is 1920x1080
+#	-device virtio-vga,xres=1920,yres=1080     frame 1920x1080, last line `savecore: no core dump`
+#	-device VGA,xres=1920,yres=1080,vgamem_mb=32   frame 3840x2160, and the WHOLE boot then
 #
-# THE REASON IS WHAT `xres=` MEANS TO EACH DEVICE. On the standard VGA it is an EDID PREFERENCE - the
-# guest is still handed the full VBE mode list and the firmware picks what it likes, which on this OVMF
-# is 4K. On virtio-vga the resolution is pushed by the host through the virtio-gpu control queue, so the
-# guest has no mode list to choose from and the console is the size the walk asked for.
+#		starting network daemons: sshd smtpd sndiod.
+#		starting local daemons: cron.
+#		OpenBSD/amd64 (openbsd.none) (ttyC0)
+#		Login:
 #
-# THAT 4K IS NOT COSMETIC. Xenodm starts, X takes the console, and every frame after it was 3840x2160 -
-# while this walk cropped `rect [0, 0, 1920, 1080]`, ONE QUARTER OF THE PICTURE. The text that came back
-# was the stipple's left edge:
+# SO virtio-vga DOES HOLD THE RESOLUTION - and on OpenBSD it STOPS REFRESHING THE FRAMEBUFFER partway
+# through boot. The kernel keeps printing (the serial line proves it: it carries everything through
+# `cron`), but nothing reaches the picture after `savecore`. Nine runs read that frozen frame and called
+# it "no login prompt".
 #
-#	see: 20 word(s): 88 .]|©§»©~™hCmDCDCDCUCUCUCUCUCUCUCUCUCUCUCUCUCUCL._ openbsd.none Qnon? > #@#
+# STANDARD VGA DOES NOT DO THAT. It gives a 3840x2160 frame, which is why `resolution`, the recording
+# resolution and every rectangle below are 4K - and it draws the login prompt.
 #
-# with `Qnon?` being `login:` seen through the pattern. A fixed 1080p console removes that whole class of
-# failure, and `VGA` was the only device in this repository that did not hold a size.
+# THE REASON TO PREFER virtio-vga - that the host pins the mode instead of the firmware choosing - is
+# real, and it is bought for on netbsd, freebsd and ghostbsd. ON THIS GUEST IT COSTS THE CONSOLE.
 step "boot the disk"
   boot
     machine "q35,accel=kvm,vmport=off"
-    args [["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "virtio-vga,xres=1920,yres=1080"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    args [["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
     timeout 900
 
 # THE NETWORK IS CONFIGURED BEFORE `machine_ssh` IS ASKED, BECAUSE THIS WALK USED TO DEADLOCK ON IT.
@@ -111,8 +113,8 @@ step "the console login prompt is up"
       bind up
       source login
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
+      rect [0, 0, 3840, 2160]
+      rect_at [3840, 2160]
       words [[login]]
     max 60
 
@@ -161,8 +163,8 @@ step "it answered"
       bind up
       source sh
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
+      rect [0, 0, 3840, 2160]
+      rect_at [3840, 2160]
       words [[SHELL_OK]]
     max 30
 
@@ -319,8 +321,8 @@ step "the session replaced the greeter with the grey root cwm leaves behind"
       bind ready
       source desk
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
+      rect [0, 0, 3840, 2160]
+      rect_at [3840, 2160]
       without [[login], [password], [openbsd]]
     max 40
 
