@@ -894,6 +894,40 @@ step "rewrite fstab without its header, and tell the loader the root"
       input ret
       settle 8
 
+# THE WIZARD IS PREVENTED, NOT ANSWERED, AND THIS IS WHY.
+#
+# MEASURED twice on real disks. `etc/rc.d/firstboot` runs on first boot when `/etc/fbreceipt` is
+# absent, and it owns the console: it prints its questions, and everything typed at the console from
+# then on is an ANSWER TO IT. A walk that drives it by reading the screen is defeated by a detail of
+# this console - IT NEVER CLEARS. The wizard's questions stay in the scrollback after they are
+# answered, so `when [bsdstats]` keeps matching the old line and keeps sending keys, which then land
+# in the middle of `mport install midnightbsd-desktop` and break it:
+#
+#	MidnightBSD FirstBoot Configuration
+#	Set your preferred package mirror? (us.uk, jp)
+#	root                                    ← a login typed into the mirror question
+#	... via bsdstats? (yes or no)
+#	admin1                                  ← a password typed into bsdstats
+#
+# and the disk came out with no desktop at all, twice.
+#
+# THE RECEIPT IS THE SCRIPT'S OWN OFF SWITCH. Reading etc/rc.d/firstboot out of base.txz:
+#
+#	receipt="/etc/fbreceipt"
+#	if [ ! -f ${receipt} ]; then ... install the desktop ... ; touch ${receipt}; fi
+#
+# so writing that file in the CHROOT - which this walk already has open - means the wizard is never
+# entered, the console belongs to the system, and the desktop is installed by a command whose exit
+# status can be read rather than by a screen this walk cannot trust.
+step "write firstboot's receipt, so the wizard never runs on this disk"
+  do
+    item
+      settle 2
+      input text "touch /etc/fbreceipt && ls -l /etc/fbreceipt"
+    item
+      input ret
+      settle 6
+
 step "let sshd accept a password"
   do
     item
@@ -998,83 +1032,125 @@ step "boot the installed disk with no medium, because the medium still owns boot
     args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
     timeout 900
 
-# THE WIZARD OWNS THE CONSOLE AND ITS PANES ARE THE ONES OCR CANNOT READ - MEASURED, `--psm 6` of its
-# frame returns `MidnightBSD Installer / dpstalb)` for the welcome pane and `MidnightBSD FirstBoot
-# Configuration` only sometimes. So the answers are SENT BLINDLY, in the script's own order, and the
-# gate below is the package being on disk rather than any pane being read.
-step "answer the firstboot wizard, taking its xfce desktop"
-  do
-    item
-      settle 60
-    # Mirror: RETURN takes the default region.
-    item
-      input ret
-      settle 20
-    # bsdstats: no
-    item
-      input text "no"
-    item
-      input ret
-      settle 15
-    # hw-probe: no
-    item
-      input text "no"
-    item
-      input ret
-      settle 15
-    # Ravenports: no
-    item
-      input text "no"
-    item
-      input ret
-      settle 15
-    # A GRAPHICAL ENVIRONMENT: YES. This is the whole point of the second boot.
-    item
-      input text "yes"
-    item
-      input ret
-      settle 20
-    # Which desktop: RETURN takes xfce, the default in the script's own `[xfce]` prompt.
-    item
-      input ret
-      settle 20
-    # Intel/AMD DRM: no.
-    item
-      input text "no"
-    item
-      input ret
-      settle 15
-    # nvidia: RETURN takes no.
-    item
-      input ret
-      settle 30
-
-# THE INSTALL ITSELF IS THE GATE, NOT THE PANES, AND THE SCREEN IS WHERE IT IS READ.
+# THE WIZARD IS DRIVEN BY WHAT THE SCREEN SAYS, NOT BY A COUNT OF RETURNS.
 #
-# MEASURED, `mport install midnightbsd-desktop` pulls Xorg, mlogind and Xfce and takes minutes on this
-# guest; the wizard then enables mlogind, which starts a GREETING SCREEN. So the gate is the machine
-# having got that far - a wizard answered wrong stops at a prompt long before any of this is drawn.
+# AN EARLIER VERSION OF THIS FILE SENT EIGHT KEYS BLINDLY AND THAT WAS MEASURED WRONG. The wizard
+# prints diagnostics of its own while it waits - `ntpd: DNS root probe failed 6 times (gave up)` - and
+# a walk that answers on a schedule answers those lines instead of the question. MEASURED on the disk
+# that run produced: the machine was still sitting on
 #
-# `MidnightBSD FirstBoot Configuration` ON SCREEN IS NOT SUCCESS: that is the wizard still waiting for
-# an answer, and it is what an answer that landed on the wrong pane looks like. So the gate accepts
-# the login manager's own screen, which only exists after the packages are in.
-step "the desktop the wizard installed reached a login screen"
+#	MidnightBSD FirstBoot Configuration
+#	Set your preferred package mirror? (us.uk, jp)
+#
+# with `root` typed into `bsdstats?` and `admin1` into `hw-probe?`, and NO desktop installed.
+#
+# THE PANES ARE READABLE, WHICH IS THE OTHER CORRECTION. An earlier note here said this console never
+# renders the wizard's words; MEASURED, `--psm 6` of a live frame returns
+#
+#	Set your preferred package mirror? (us.uk, jp)
+#	Would you like to report your install via bsdstats? (yes or no)
+#	Would you like to report your install via hu-probe? (yes or no)
+#	Would you like to install Ravenports, an alternative package manager? (yes or no)
+#
+# - every question, because the wizard draws plain white/green text and not the light-blue headings
+# the installer's TUI uses. So each pass names the question it is looking at and answers that one.
+#
+# THE QUESTIONS, IN THE SCRIPT'S OWN ORDER (etc/rc.d/firstboot, read out of the disc's base.txz):
+#
+#	Set your preferred package mirror? (us.uk, jp)             RETURN takes the default
+#	Would you like to report your install via bsdstats?        no
+#	Would you like to report your install via hw-probe?        no
+#	Would you like to install Ravenports?                      no
+#	Do you wish to enable a graphical environment?              YES - this is the point
+#	Which desktop would you like as the default? [xfce]        RETURN takes xfce
+#	Do you wish to install Intel or AMD GPU drivers?           no
+#	Do you wish to install nvidia GPU driver? (no, 340, ...)   RETURN takes no
+#
+# NOTE `hu-probe` IN THE MEASURED TEXT AND NOT `hw-probe`: the model reads the `w` as `u`. The `when`
+# below spells it the way the screen renders it, because that is what the gate is compared against.
+# THE DESKTOP, INSTALLED OVER SSH, ON THE DISK THIS WALK JUST BOOTED.
+#
+# NO WIZARD IS INVOLVED - the receipt written in the chroot keeps it out - so the console is free and
+# sshd answers. That is what makes this step readable: every command below returns an exit status,
+# and the gate at the end is a FILE rather than a screen.
+#
+# `midnightbsd-desktop` IS THE RELEASE'S OWN DEFINITION OF A DESKTOP. From etc/rc.d/firstboot:
+#
+#	# midnightbsd-desktop provides Xorg, mlogind and xfce.
+#	/sbin/ipfw disable firewall
+#	/usr/sbin/mport install midnightbsd-desktop
+#	/sbin/ipfw enable firewall
+#	/sbin/sysrc mlogind_enable=YES
+#	/sbin/sysrc dbus_enable=YES
+#
+# so this installs that one name and enables those two services, which is the same thing the wizard
+# would have done - without the console.
+step "wait for sshd"
   repeat
-    do
-      item
-        settle 20
-      item "read the screen"
-        read
-          name firstboot
-    until
-      bind desktop_landed
-      source firstboot
-      mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      without [[firstboot, configuration], [set, your, preferred, package, mirror]]
-      words [[login], [username], [password], [midnightbsd], [welcome]]
+    until machine_ssh
     max 60
+    pause 10
+
+step "prove the kernel and the account over ssh"
+  ssh "uname -a; id -un"
+
+# THE INTERFACE IS PUT IN rc.conf, NOT ONLY BROUGHT UP, BECAUSE THE NEXT STAGE GETS A DIFFERENT BOOT.
+#
+# THE MEASUREMENT THAT SAYS SO. This step used to run `dhclient vtnet0` and nothing else, which is a
+# RUNTIME setting: it survives until the machine stops. `midnightbsd/steps/ssh.walk` then boots the
+# published disk and its first wait is
+#
+#	=== wait for sshd
+#	  error: the repeat ran 60 attempt(s) and the condition never held: sshd does not accept a connection
+#
+# with the host's diagnosis reporting `172.30.0.2 dev qemubr0 FAILED` - NO ADDRESS EVER ARRIVED. The
+# generated artwork then tried to configure the network over ssh, which cannot work: sshd is what needs
+# the network.
+#
+# `ifconfig_vtnet0="DHCP"` IS WHAT MAKES THE NEXT BOOT DO IT WITHOUT ANYBODY LOGGING IN, which is the
+# only way a stage whose first act is "wait for sshd" can ever connect.
+step "make DHCP permanent, so the next boot has an address without help"
+  ssh "sudo sh -c 'grep -q ifconfig_vtnet0 /etc/rc.conf || echo ifconfig_vtnet0=DHCP >> /etc/rc.conf; sync; grep ifconfig_vtnet0 /etc/rc.conf'"
+  timeout 240
+
+
+step "bring the interface up"
+  ssh "sudo sh -c 'ifconfig vtnet0 up 2>/dev/null; dhclient vtnet0 2>/dev/null; ifconfig vtnet0'"
+  timeout 240
+
+step "give the booted system a resolver"
+  ssh "sudo sh -c 'echo nameserver 172.30.0.1 > /etc/resolv.conf; echo nameserver 1.1.1.1 >> /etc/resolv.conf'; cat /etc/resolv.conf"
+  timeout 120
+
+# THE MIRROR IS CHOSEN EXPLICITLY. The wizard's first question is which region to install from, and
+# `mport config set mirror_region` is the setting behind it.
+step "choose the mirror region the wizard would have asked for"
+  ssh "sudo mport config set mirror_region us 2>&1 | tail -2; sudo mport config get mirror_region 2>&1"
+  timeout 180
+
+step "index the mirror"
+  ssh "sudo mport index 2>&1 | tail -5"
+  timeout 1800
+
+step "install midnightbsd-desktop, the release's own Xorg + mlogind + xfce"
+  ssh "sudo env ASSUME_ALWAYS_YES=yes mport install -A -M midnightbsd-desktop 2>&1 | tail -40"
+  timeout 7200
+
+step "prove the desktop's files are on disk, not just its package record"
+  ssh "ls -l /usr/local/bin/Xorg /usr/local/bin/startxfce4 /usr/local/sbin/mlogind 2>&1"
+  timeout 180
+
+step "enable the login manager and dbus, which is what the wizard enables"
+  ssh "sudo sysrc mlogind_enable=YES; sudo sysrc dbus_enable=YES; sysrc -a | grep mlogind; sysrc -a | grep dbus"
+  timeout 180
+
+step "give the account a session that starts xfce"
+  ssh "echo exec /usr/local/bin/startxfce4 > ~/.xsession && chmod +x ~/.xsession && cat ~/.xsession"
+  timeout 120
+
+step "flush the writes before the machine stops"
+  ssh "sudo sync"
+  timeout 300
 
 step "stop the machine after the wizard finishes"
   stop "{{ shutdown }}"

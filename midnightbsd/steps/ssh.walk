@@ -67,48 +67,49 @@ step "boot the disk"
     args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
     timeout 900
 
-# THE WIZARD IS ANSWERED, NOT AVOIDED. It is the one thing on this console that owns it before sshd
-# gets a turn, and its panes are the ones that OCR cannot read.
+# THE WIZARD IS ALREADY OFF, AND THIS STAGE USED TO PRESS KEYS AT A WIZARD THAT NEVER APPEARED.
 #
-# MEASURED, its questions in order and the answer that stops it doing anything:
+# `midnightbsd/steps/install.walk` WRITES `/etc/fbreceipt` IN THE CHROOT, and that file is the
+# firstboot script's own off switch - its header quotes the script:
 #
-#	Set your preferred package mirror? (us.uk, jp)      -> RETURN (takes the default)
-#	Would you like to report your install via bsdstats? -> no
-#	Would you like to report your install via hw-probe? -> no
-#	Would you like to install Ravenports? (yes or no)   -> no
-#	Do you wish to enable a graphical environment?       -> no   (THIS STAGE installs it explicitly)
+#	receipt="/etc/fbreceipt"
+#	if [ ! -f ${receipt} ]; then ... install the desktop ... ; touch ${receipt}; fi
 #
-# The last one is `no` and that is deliberate: the wizard's own install path cannot be observed - it
-# runs `mport install midnightbsd-desktop` and then a stack of GPU questions - and a walk that cannot
-# see what happened cannot claim it did. This file installs the same package with a command whose
-# exit status it can read.
-step "answer the firstboot wizard and stop it installing anything"
-  do
-    item
-      settle 50
-    item
-      input ret
-      settle 20
-    item
-      input text "no"
-    item
-      input ret
-      settle 15
-    item
-      input text "no"
-    item
-      input ret
-      settle 15
-    item
-      input text "no"
-    item
-      input ret
-      settle 15
-    item
-      input text "no"
-    item
-      input ret
-      settle 30
+# SO THE DISK THIS STAGE BOOTS HAS ALREADY HAD FIRSTBOOT, and does not run one again. `sshd` was also
+# already ticked on the installer's Services pane - `install.walk` says so in its own measurement
+# ("Services   sshd ticked, mouse, ntpd, mdns  -> RET") - so nothing here has to enable it.
+#
+# AND KEYS AT A WIZARD THAT IS NOT THERE LAND SOMEWHERE ELSE. MEASURED, run 45934963111:
+#
+#	=== answer the firstboot wizard and stop it installing anything
+#	  waiting 50s, as measured
+#	=== wait for sshd
+#	  error: the repeat ran 60 attempt(s) and the condition never held: sshd does not accept a connection
+#
+# with the host's own diagnosis quoting the NIC state as `172.30.0.2 dev qemubr0 FAILED` - the guest
+# never answered on the network at all. THE FIVE BLIND `ret`/`no` PAIRS WENT TO THE CONSOLE LOGIN
+# PROMPT, where `ret` submits an empty username and `no` becomes one, repeatedly.
+#
+# SO THIS STAGE WAITS FOR THE SYSTEM RATHER THAN TYPING AT IT. The console is read for a login prompt,
+# which is what a booted MidnightBSD shows when nothing owns the console, and nothing is sent.
+step "the console shows the system is up, with no wizard to answer"
+  repeat
+    do
+      item
+        settle 10
+      item "read the console"
+        read
+          name boot
+    until
+      bind up
+      source boot
+      mode text
+      rect [0, 0, 1024, 768]
+      rect_at [1024, 768]
+      scale 1
+      words [[login:], [password:]]
+    max 60
+
 
 step "wait for sshd"
   repeat
