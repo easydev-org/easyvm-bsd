@@ -44,7 +44,7 @@ ssh_port 2222
 step "boot the published disk"
   boot
     machine "q35,accel=kvm,vmport=off"
-    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "2048"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "virtio-vga,xres=1920,yres=1080"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "2048"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
     timeout 900
 
 
@@ -67,6 +67,23 @@ step "boot the published disk"
 # AND NO WAKE IS NEEDED HERE, measured too: `netbsd/steps/smoke.walk` reads THIS guest's prompt without
 # pressing anything, and got `Login: BSD ...` on the first read. The banner this walk was worried about
 # is a habit from guests whose consoles hold the kernel's last line; theirs do not.
+# NETBSD KEEPS THE STANDARD `VGA`, AND THAT IS MEASURED RATHER THAN PREFERRED.
+#
+# Every other walk in this repository moved to `virtio-vga` because it HOLDS its resolution - measured
+# side by side in this cluster's lab pod, `VGA,xres=1920` gave a 3840x2160 frame and `virtio-vga` gave
+# 1920x1080. NETBSD IS THE ONE GUEST WHERE THAT DEVICE SHOWS NOTHING AT ALL.
+#
+# MEASURED, on the published `bsd-netbsd-install` disk, booted in the lab pod with exactly the arguments
+# this file used to carry but for the display device:
+#
+#	-device virtio-vga,xres=1920,yres=1080
+#	  -> screendump 1920x1080, 6214 bytes, decoded mean 0     <- A BLACK FRAME, 1920x1080 OF NOTHING
+#
+# and in CI the same change failed the loader gate with `see: 0 word(s):` for a thousand frames. NetBSD
+# 11's `viogpu(4)` does not bring a wsdisplay up on this build, so there is no console to read.
+#
+# SO THIS GUEST KEEPS `VGA` AND ITS 720x400 TEXT CONSOLE, and every gate below crops that size. It is
+# the only file in the repository that does, and the reason is in this comment.
 # THE BOOT TAKES MINUTES ON THIS GUEST, AND THE SMOKE WALK ALREADY MEASURED HOW TO WAIT FOR IT.
 #
 # MEASURED on run 46023357350's successor: this gate read `see: 0 word(s):` on every attempt - the
@@ -87,8 +104,8 @@ step "the boot loader started the installed file system"
       bind at_boot
       source boot
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
       scale 1
       # `Losin` IS WHAT OCR MAKES OF `Login` ON THIS SCREEN - MEASURED, `see: 4 word(s): Losin | BSD h`
       # - so the loader gate asks for `BSD`, which survives the same read intact.
@@ -108,8 +125,8 @@ step "the console login prompt is up"
       bind up
       source login
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
       scale 1
       # `login` IS WHAT THE PROMPT SAYS AND `Losin` IS WHAT OCR MAKES OF IT.
       #
@@ -160,8 +177,8 @@ step "the shell is a root prompt"
       bind up
       source sh
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
       scale 1
       # THE SHELL PROMPT IS A SINGLE `#` AND OCR IS UNRELIABLE ON THIS SCREEN, so the gate asks for
       # the absence of the login prompt instead: a `Psassword`/`Password` line means the name was not
@@ -289,8 +306,8 @@ step "the address is on the screen"
       bind up
       source addr
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
       scale 1
       words [[inet]]
     max 20
@@ -360,8 +377,8 @@ step "the display manager replaced the text console"
       bind up
       source desk
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
       scale 1
       without [[login], [root@]]
     max 40
