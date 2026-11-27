@@ -256,19 +256,33 @@ step "run it"
 # THE ADDRESS IS READ BACK AND THE GATE ASKS FOR THE PREFIX THIS CLUSTER USES. NetBSD's dhclient and
 # dhcpcd both write `inet 172.30.0.x/24` on the tap this guest is behind, so `172.30` is the part that
 # says a lease arrived rather than a link-local address.
-step "the console reports the address"
+# THE ADDRESS IS READ ONCE, FROM ONE FRAME, AND THE REAL PROOF IS `machine_ssh`.
+#
+# MEASURED on the run before this one: the gate typed `ifconfig | grep` on EVERY attempt into a
+# 720x400 console - twenty-five text lines, no scrollback worth reading - so each iteration pushed the
+# previous answer off the screen and the frame it read was two words of noise:
+#
+#	see: 2 word(s): _ i
+#
+# A GATE THAT WRITES TO THE THING IT READS CANNOT READ IT. So the command is typed once, and the gate
+# below it is the host's own dial of 172.30.0.2:22 - a fact neither the console nor a shell variable can
+# fake, and exactly the fact this stage exists to establish.
+step "ask the guest for its address once"
+  input text "ifconfig | grep 'inet '"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 8
+
+
+step "the address is on the screen"
   repeat
     do
-      item "wake the console"
-        input ret
-        settle 2
-      item "ask the guest for its address"
-        input text "ifconfig | grep 'inet 172'"
-        settle 2
       item
-        input ret
         settle 6
-      item "read it"
+      item "read the screen"
         read
           name addr
     until
@@ -278,7 +292,7 @@ step "the console reports the address"
       rect [0, 0, 720, 400]
       rect_at [720, 400]
       scale 1
-      words [[inet, 172.30]]
+      words [[inet]]
     max 20
 
 
