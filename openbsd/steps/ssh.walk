@@ -407,13 +407,28 @@ step "cwm is in the base system"
 # XENODM IS TURNED BACK ON HERE - this stage stopped it at the start so its own console work would not
 # be taken away, and the desktop gates below are what turn it on for.
 step "turn xenodm back on and start it"
-  ssh "rcctl enable xenodm; rcctl start xenodm; echo XENODM_STARTED"
+  ssh "doas rcctl enable xenodm; doas rcctl start xenodm; echo XENODM_STARTED"
   timeout 120
 
 
 step "xenodm is enabled, which is what starts that session"
   ssh "sysrc -n xenodm 2>/dev/null; grep -c 'xenodm' /etc/rc.conf.local /etc/rc.conf 2>/dev/null | grep -v ':0'"
 
+# THE DISPLAY MANAGER IS STARTED AS ROOT, BECAUSE THE ACCOUNT THIS STAGE LOGS IN AS IS NOT ONE.
+#
+# MEASURED on run a6cac51's run, whose serial and ssh output say it plainly:
+#
+#	ssh: rcctl enable xenodm; rcctl start xenodm; echo XENODM_STARTED -> 0
+#	  /etc/rc.d/xenodm: need root privileges
+#	  xenodm(failed)
+#
+# `install.walk` answers `Allow root ssh login? [no]`, so every ssh command in this file runs as
+# `vmuser` - and `rcctl` refuses to start a service without root.
+#
+# `doas` IS THE ROUTE, NOT `su`: su reads its password from a TTY, and an ssh command has none, so
+# `su -c` would hang or fail. `doas` needs no password once `/etc/doas.conf` grants the account, and
+# install.walk now writes exactly that grant for `vmuser` while the new root is mounted at /mnt.
+#
 # THE SERVICE IS ASKED FOR ITS OWN STATE, NOT FOR A PROCESS NAME.
 #
 # MEASURED on run 8e4d756's run - the first run whose ssh worked at all. `rcctl start xenodm` exited 0 and

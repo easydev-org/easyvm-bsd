@@ -511,6 +511,26 @@ step "prove the new system is mounted before writing to it"
 #
 # `sed` REPLACES THE tty00 LINE RATHER THAN APPENDING, because a second entry for the same line is not
 # what init reads, and this walk has already been bitten by a rc file that preferred the wrong line.
+# THE ACCOUNT IS GRANTED `doas`, BECAUSE THE SSH STAGE RUNS AS IT AND `rcctl` NEEDS ROOT.
+#
+# MEASURED on run a6cac51's run:
+#
+#	ssh: rcctl enable xenodm; rcctl start xenodm; echo XENODM_STARTED -> 0
+#	  /etc/rc.d/xenodm: need root privileges
+#	  xenodm(failed)
+#
+# `install.walk` answers `Allow root ssh login? [no]`, so every ssh command in the next stage runs as
+# `vmuser`, and OpenBSD ships no sudo and no doas.conf. The documented grant is one line, and `permit
+# persist` means the account is not asked for its password on every call - which it could not answer
+# anyway over a command channel.
+step "grant the account doas, with no password"
+  do
+    item
+      input text "echo permit persist :{{ user }} > /mnt/etc/doas.conf && cat /mnt/etc/doas.conf"
+    item
+      input ret
+      settle 6
+
 step "give that line a getty, which ships off"
   do
     item
