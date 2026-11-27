@@ -274,6 +274,12 @@ step "run it"
 
 step "start a dhclient on each, in the background"
   input text "while read i; do dhclient -b $i; done < /tmp/ifs; echo DHCP_STARTED> /dev/tty00"
+  settle 3
+
+
+step "run it"
+  input ret
+  settle 20
 
 
 # THE BOOT-TIME FILE IS WRITTEN FOR WHICHEVER INTERFACE THE LEASE ARRIVED ON, so the address survives
@@ -302,6 +308,14 @@ step "run it"
 # THE PROOF IS THE HOST'S OWN PROBE, NOT A WORD ON A SCREEN. `machine_ssh` dials 172.30.0.2:22, which
 # is a fact neither the console nor a shell variable can fake - and it is exactly the fact this stage
 # exists to establish. The `wait for sshd` step that follows is that probe.
+# THE LEASE DAEMON ANSWERS IN A FILE. `DHCP_STARTED` only says the loop finished; the host's own
+# `machine_ssh` probe below is what says a lease arrived.
+step "the serial line shows the loop finished"
+  until "DHCP_STARTED"
+  from console
+  timeout 120
+
+
 step "wait for sshd"
   repeat
     until machine_ssh
