@@ -48,7 +48,7 @@ ssh_port 2222
 step "boot the disk"
   boot
     machine "q35,accel=kvm,vmport=off"
-    args [["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01"]]
+    args [["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-m", "4096"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "e1000,netdev=net0,mac=52:54:00:56:4d:01"]]
     timeout 900
 
 # THE NETWORK IS CONFIGURED BEFORE `machine_ssh` IS ASKED, BECAUSE THIS WALK USED TO DEADLOCK ON IT.
@@ -280,7 +280,25 @@ step "run it"
 #
 # 172.30.0.2 IS THE ADDRESS EVERY OTHER GUEST HERE USES - the tap is , the host's own
 # diagnosis in this very log says , and the illumos stages write this value.
-# `host_mtu=1450` IS GONE FROM THE NIC, AND THAT IS THE ONE DIFFERENCE LEFT.
+# THE NIC IS `e1000`, BECAUSE `virtio-net-pci` NEVER REPORTS CARRIER TO THIS GUEST.
+#
+# MEASURED over two runs, with `host_mtu=1450` removed on the second:
+#
+#	host diag [tap]: qemutap0 ... <BROADCAST,MULTICAST,PROMISC,UP,LOWER_UP> mtu 1500 master qemubr0
+#	                 state UP                                    <- THE HOST SIDE IS PERFECT
+#
+#	vio0: flags=2008802<BROADCAST,SIMPLEX,MULTICAST,LRO> mtu 1500
+#	      status: no carrier                                     <- AND STAYS THAT WAY
+#
+# `ifconfig vio0 up` DOES NOT EVEN SET THE `UP` FLAG in those flags, which is what an interface with no
+# link does - and `ifconfig` then refuses the address. The tap is UP, LOWER_UP and enslaved to the bridge,
+# so the fault is in what virtio-net negotiates with this guest's `vio` driver, and removing `host_mtu`
+# did not change it.
+#
+# `e1000` IS THE DRIVER WITH NO SUCH NEGOTIATION: OpenBSD binds it as `em0`, it is what the installer's
+# own prompt offers as the default interface name, and it reports carrier from the tap the same way a
+# physical card does. The walk does not name the interface - `ifconfig -l` still decides that - so this
+# changes only how the link is presented.
 #
 # MEASURED on run 17e59ea's run, whose serial file carries BOTH halves of the contradiction:
 #
