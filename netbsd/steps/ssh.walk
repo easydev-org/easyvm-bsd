@@ -15,13 +15,19 @@
 #
 # `machine_ssh` IS THE LAST QUESTION HERE. The address is set from the console first:
 #
-#	root + admin1                     the password install.walk set on the root account
-#	echo dhcp > /etc/ifconfig.vtnet0  the boot-time file, so the lease survives the reboot
-#	ifconfig vtnet0 up; dhclient      the lease itself
+#	root + admin1                              the password install.walk set on the root account
+#	ifconfig <if> inet 172.30.0.2/24            the address, written down - this tap has no DHCP
+#	echo inet 172.30.0.2/24 > /etc/ifconfig.<if>  the boot-time file, so it survives the reboot
 #
-# THE INTERFACE IS `vtnet0`: this guest's card is `virtio-net-pci`, and NetBSD's driver for it is
-# `virtnet`/`vtnet`. The walk does not assume - it prints `ifconfig -l` first, so a wrong name is
-# named in the log rather than looking like a dhclient that did nothing.
+# THE CARD IS `e1000` AND NOT `virtio-net-pci`, AND THAT IS THE MEASUREMENT THE openbsd STAGE PAID FOR:
+#
+#	host diag [tap]: qemutap0 ... UP,LOWER_UP ... master qemubr0 state UP
+#	vio0: status: no carrier
+#
+# THE HOST SIDE IS PERFECT AND THE GUEST SEES NO LINK, with virtio-net-pci. `e1000` reports carrier from
+# the same tap, which is what let openbsd's stage start sshd at all. NetBSD binds `e1000` as `wm0`, and
+# this walk does not name it - `ifconfig -l` decides, so a wrong name is named in the log instead of
+# looking like a command that did nothing.
 #
 # THE DESKTOP IS THE CLAIM THE PACKAGES ARE FOR. install.walk's own note says the desktop belongs
 # here, installed from pkgin, "because a package install is a network operation" - and this is the
@@ -44,7 +50,7 @@ ssh_port 2222
 step "boot the published disk"
   boot
     machine "q35,accel=kvm,vmport=off"
-    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "2048"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "virtio-net-pci,netdev=net0,mac=52:54:00:56:4d:01,romfile=,host_mtu=1450"]]
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "2048"], ["-chardev", "socket,id=qga0,path=qga.sock,server=on,wait=off"], ["-device", "virtio-serial"], ["-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "e1000,netdev=net0,mac=52:54:00:56:4d:01"]]
     timeout 900
 
 
