@@ -67,11 +67,40 @@ step "boot the published disk"
 # AND NO WAKE IS NEEDED HERE, measured too: `netbsd/steps/smoke.walk` reads THIS guest's prompt without
 # pressing anything, and got `Login: BSD ...` on the first read. The banner this walk was worried about
 # is a habit from guests whose consoles hold the kernel's last line; theirs do not.
+# THE BOOT TAKES MINUTES ON THIS GUEST, AND THE SMOKE WALK ALREADY MEASURED HOW TO WAIT FOR IT.
+#
+# MEASURED on run 46023357350's successor: this gate read `see: 0 word(s):` on every attempt - the
+# screen was still black, because the loader had not finished. `netbsd/steps/smoke.walk` waits in TWO
+# steps for exactly this: first for the loader's own words (`booting hd0a:`, which bootxx prints only
+# when it has found the filesystem), then for the login prompt, each with `settle 15`.
+#
+# SO THE LOADER IS WAITED FOR FIRST, with the same words smoke uses.
+step "the boot loader started the installed file system"
+  repeat
+    do
+      item
+        settle 15
+      item "read the screen"
+        read
+          name boot
+    until
+      bind at_boot
+      source boot
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      scale 2
+      # `Losin` IS WHAT OCR MAKES OF `Login` ON THIS SCREEN - MEASURED, `see: 4 word(s): Losin | BSD h`
+      # - so the loader gate asks for `BSD`, which survives the same read intact.
+      words [[BSD], [bsd]]
+    max 60
+
+
 step "the console login prompt is up"
   repeat
     do
       item
-        settle 5
+        settle 15
       item "read the screen"
         read
           name login
