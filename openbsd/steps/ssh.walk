@@ -414,8 +414,22 @@ step "turn xenodm back on and start it"
 step "xenodm is enabled, which is what starts that session"
   ssh "sysrc -n xenodm 2>/dev/null; grep -c 'xenodm' /etc/rc.conf.local /etc/rc.conf 2>/dev/null | grep -v ':0'"
 
+# THE SERVICE IS ASKED FOR ITS OWN STATE, NOT FOR A PROCESS NAME.
+#
+# MEASURED on run 8e4d756's run - the first run whose ssh worked at all. `rcctl start xenodm` exited 0 and
+# `pgrep -x xenodm` found nothing, so this step's `&&` gave exit 1. The daemon is `xenodm`, but rc.d runs
+# it through a wrapper, and on this release the process name `pgrep -x` looks for is not the one the
+# service starts.
+#
+# `rcctl check xenodm` asks the rc system the same question the boot path asks, and is what the two
+# neighbouring steps already use.
+step "the greeter's service is running"
+  ssh "rcctl check xenodm"
+  timeout 60
+
+
 step "the greeter is drawing, so the display is up"
-  ssh "pgrep -x xenodm && echo XENODM_UP"
+  ssh "pgrep xenodm >/dev/null && echo XENODM_UP || (tail -20 /var/log/xenodm.log; exit 1)"
 
 # THE PICTURE, AND IT IS THE CLAIM THIS STAGE EXISTS FOR. See the header: the grey stipple root is
 # what cwm leaves on screen, and it is not what the greeter draws.
