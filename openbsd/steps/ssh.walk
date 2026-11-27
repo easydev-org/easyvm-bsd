@@ -89,13 +89,42 @@ step "the empty password the installer never set"
   settle 8
 
 
-# THE INTERFACE IS `em0` - the install walk typed that name at the installer's own prompt, and it is
-# the driver this virtio-net card binds to. `dhcp` IS A LINE IN `/etc/hostname.em0`, so the address
-# survives the reboot this stage performs at the end and the next boot comes up reachable.
+# THE INTERFACE'S NAME IS ASKED FOR, NOT ASSUMED, AND THAT IS A CORRECTION.
 #
-# The file write and the interface bring-up are separate steps, so a failure names which half broke.
-step "write dhcp into the interface's own file, so the lease survives the reboot"
-  input text "echo dhcp > /etc/hostname.em0"
+# The installer's own prompt offers `em0` as its DEFAULT - that is the hint it prints, not a
+# measurement of this card. THIS GUEST'S CARD IS `virtio-net-pci`, whose OpenBSD driver is `vio`, so
+# `em0` is the wrong name and `dhclient em0` fails with `Device not configured` - which is exactly what
+# the host's `no route to host` looked like.
+#
+# `ifconfig -l` is written to the SERIAL LINE, because the install walk enabled `xenodm` and the X
+# server has taken the screen: MEASURED on run 46017870176, every frame after boot read
+#
+#	see: 70 word(s): =~ —rr—“_—Cr"TC(*RREREREERERRNC:CiCi*=*i*tiw*siw*=swi‘;S,COCO...
+#
+# which is the stipple of a graphical session. `/dev/tty00` writes into the file `until ... from
+# console` reads - the same channel the firmware and the kernel already use.
+step "ask the kernel for its interface names"
+  input text "ifconfig -l > /dev/tty00 2>&1"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 6
+
+
+step "name the first non-loopback interface"
+  input text "ifconfig -l | tr ' ' '\\n' | grep -v lo0 | head -1 > /tmp/i"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 5
+
+
+step "write dhcp into that interface's boot-time file"
+  input text "I=$(cat /tmp/i); echo dhcp > /etc/hostname.$I; cat /tmp/i"
   settle 3
 
 
@@ -104,39 +133,33 @@ step "run it"
   settle 5
 
 
-step "bring the interface up with a lease"
-  input text "ifconfig em0 up; dhclient em0"
+# THE LEASE, AND ITS PROOF GOES TO THE SERIAL LINE FOR THE REASON ABOVE. `dhclient` prints nothing on
+# success, so the gate does not ask it anything - it asks `ifconfig` for the address afterwards.
+step "take the lease"
+  input text "I=$(cat /tmp/i); ifconfig $I up; dhclient $I"
   settle 3
 
 
 step "run it"
   input ret
-  settle 20
+  settle 25
 
 
-step "the console reports the address"
-  repeat
-    do
-      item "wake the console"
-        input ret
-        settle 2
-      item "ask for the address"
-        input text "ifconfig em0 | grep inet"
-        settle 2
-      item
-        input ret
-        settle 5
-      item "read it"
-        read
-          name addr
-    until
-      bind up
-      source addr
-      mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      words [[inet, 172.30]]
-    max 20
+
+step "report the address on the serial line"
+  input text "I=$(cat /tmp/i); ifconfig $I | grep 'inet ' > /dev/tty00 2>&1"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 6
+
+
+step "the serial line carries the address"
+  until "inet 172.30"
+  from console
+  timeout 180
 
 
 step "wait for sshd"
@@ -151,16 +174,11 @@ step "prove the kernel over ssh"
 step "prove the account over ssh"
   ssh "id -un"
 
-# THE MACHINE THE INSTALLER WROTE HAS NO NETWORK CONFIGURATION OF ITS OWN, BECAUSE THE INSTALL WALK
-# ANSWERED EVERY NETWORK QUESTION WITH `none` - that is what makes it offline. The interface is
-# brought up here, and DHCP is what the tap behind this guest serves.
-step "bring the interface up, because the install walk configured none"
-  ssh "sudo sh -c 'grep -q \"^dhcp\" /etc/hostname.em0 2>/dev/null || echo dhcp > /etc/hostname.em0; ifconfig em0 up; dhclient em0 >/dev/null 2>&1; ifconfig em0'"
-  timeout 180
 
-step "prove the address"
-  ssh "ifconfig em0 | grep 'inet '"
-
+# THE ADDRESS THE CONSOLE CONFIGURED, READ BACK OVER SSH - the same fact from the other side.
+step "prove the address over ssh"
+  ssh "ifconfig -a | grep 'inet 172.30'"
+  timeout 60
 # THE FILE THE INSTALL WALK WROTE, READ BACK FROM THE BOOTED SYSTEM RATHER THAN FROM THE INSTALLER.
 step "the account's session is cwm, on the booted disk"
   ssh "cat /home/{{ user }}/.xsession"
