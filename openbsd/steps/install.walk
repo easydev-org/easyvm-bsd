@@ -440,21 +440,42 @@ step "the root account gets one too"
 #
 # `rc.conf.local` IS THE RIGHT FILE, NOT `rc.conf`: OpenBSD's rc reads rc.conf first and rc.conf.local
 # after it, so a setting here wins without editing the file the release ships.
+# THE MOUNT IS PROVED BEFORE ANYTHING IS WRITTEN TO IT, AND THE RESULT IS READ BACK.
+#
+# MEASURED on run 46038954806, whose published disk booted with
+#
+#	init: /etc/fbtab: chmod(/dev/dri/card0): Read-only file system
+#	chown: group is invalid: wheel
+#	/usr/libexec/reorder_kernel: not found
+#
+# - a disk whose /etc and /usr are not the sets the installer unpacked. THIS STEP IS THE PRIME SUSPECT:
+# if /mnt was not mounted when it ran, `> /mnt/etc/rc.conf.local` wrote into the ramdisk's own empty
+# directory tree, `&& cat` never ran, and the step failed SILENTLY because nothing reads it back.
+#
+# SO THE MOUNT IS CHECKED FIRST, ON ITS OWN LINE, and the write only happens behind that answer.
+step "prove the new system is mounted before writing to it"
+  do
+    item
+      input text "mount | grep -c 'on /mnt ' && echo MNT_OK || echo MNT_NONE"
+    item
+      input ret
+      settle 6
+
 step "publish the disk with xenodm off, so the console stays a console"
   do
     item
       input text "echo xenodm=NO > /mnt/etc/rc.conf.local && cat /mnt/etc/rc.conf.local"
     item
       input ret
-      settle 6
+      settle 8
 
 step "flush the writes before the machine stops"
   do
     item
-      input text "sync"
+      input text "sync; sync; echo SYNCED"
     item
       input ret
-      settle 12
+      settle 25
 
 step "stop the machine"
   stop "{{ shutdown }}"
