@@ -229,27 +229,24 @@ step "xenodm - yes, which is the graphical login"
       input ret
       settle 4
 
-# THE SERIAL CONSOLE IS ANSWERED `yes`, AND THAT IS WHAT MAKES THE NEXT STAGE READABLE.
+# THE SERIAL CONSOLE IS ANSWERED `no` HERE, AND CONFIGURED BY HAND LATER.
 #
-# MEASURED over eight runs: with `no`, this disk's ONLY console is the VGA framebuffer, and every ssh
-# stage has had to OCR it. On run 46046031356 the frames stopped at
+# MEASURED on run 46048845609: answering the installer's `serial console?` with `yes` SHIFTED EVERY
+# ANSWER AFTER IT, and the published disk was 96 MiB - a qcow2 header with nothing written to it. The
+# error was the publisher's own:
 #
-#	see: 150 word(s): starting RPC daemons: . savecore: no core dump checking quotas: done. clearing ...
+#	the disk is 96 MiB, below the 512 MiB floor for an installed system
 #
-# and never advanced to `login:` - the boot log was the last thing this reader ever saw, and a gate that
-# looked for its own marker was satisfied by noise in that text. The framebuffer is a poor channel for a
-# text console, and no amount of rectangle-tuning fixes an OCR that is reading a kernel's scrollback.
+# The installer's serial-console answer changes what it asks next, so a walk that answers `yes` and then
+# keeps feeding the same sequence types every later answer one question early. THIS STAGE'S ANSWERS ARE
+# POSITIONAL and that is not a thing to be clever about.
 #
-# `yes` HERE MAKES THE INSTALLER WRITE `/etc/boot.conf` WITH `set tty com0`, so the booted system puts
-# its console on the SERIAL LINE - which is `console.log`, the file the engine already writes and
-# `until ... from console` already reads. It is the channel smartos and omnios use for the same reason.
-step "serial console - yes, so the console is a file rather than a picture"
-  do
-    item
-      input text "yes"
-    item
-      input ret
-      settle 4
+# THE CONSOLE IS STILL MOVED TO THE SERIAL LINE, just not by the installer: see the `set tty com0` step
+# below, which writes `/etc/boot.conf` and enables `tty00` in `/etc/ttys` while the new root is mounted
+# at /mnt. That is the same file the installer would have written, done where this walk can see it.
+step "serial console - no, because answering yes shifts every answer after it"
+  input ret
+  settle 4
 
 step "the account"
   do
@@ -475,6 +472,41 @@ step "prove the new system is mounted before writing to it"
   do
     item
       input text "mount | grep -c 'on /mnt ' && echo MNT_OK || echo MNT_NONE"
+    item
+      input ret
+      settle 6
+
+# THE CONSOLE IS MOVED TO THE SERIAL LINE HERE, WHERE THE NEW ROOT IS MOUNTED AND THE WRITE CAN BE READ.
+#
+# THE PROBLEM THIS SOLVES, MEASURED over eight ssh runs: with the console on the framebuffer, the reader
+# stops advancing at the boot log -
+#
+#	see: 150 word(s): starting RPC daemons: . savecore: no core dump checking quotas: done. clearing ...
+#
+# - and never reaches `login:`. One gate was reported satisfied by noise in that text while the screen
+# showed no prompt at all. The serial line is `console.log`, which the engine already writes and
+# `until ... from console` already reads; it is the channel smartos and omnios use for this reason.
+#
+# TWO FILES, BOTH DOCUMENTED:
+#
+#	/etc/boot.conf   `set tty com0` makes the LOADER and the KERNEL put their console on com0
+#	/etc/ttys        `tty00 "/usr/libexec/getty std.9600" vt100 on secure` gives that line a getty, so
+#	                 there is a `login:` to type at; OpenBSD ships tty00 as `off secure`
+#
+# `sed` REPLACES THE tty00 LINE RATHER THAN APPENDING, because a second entry for the same line is not
+# what init reads, and this walk has already been bitten by a rc file that preferred the wrong line.
+step "put the console on the serial line"
+  do
+    item
+      input text "echo set tty com0 > /mnt/etc/boot.conf && cat /mnt/etc/boot.conf"
+    item
+      input ret
+      settle 6
+
+step "give that line a getty, which ships off"
+  do
+    item
+      input text "sed -i 's|^tty00.*|tty00 \"/usr/libexec/getty std.9600\" vt100 on secure|' /mnt/etc/ttys && grep ^tty00 /mnt/etc/ttys"
     item
       input ret
       settle 6
