@@ -114,21 +114,37 @@ step "advance the wizard to the account page"
     max 20
 
 
-# THE ROOT PASSWORD, TWICE - the page asks for it and its confirmation.
-step "the root password"
-  input 960 480
+# THE ROOT PASSWORD IS TYPED INTO WHATEVER FIELD HAS FOCUS, AND TAB MOVES BETWEEN THEM.
+#
+# MEASURED on the third run: the wizard reached this page and STOPPED, with
+#
+#	see: 34 word(s): Admin User e e The initial root password will be set to ...
+#
+# because the two clicks this walk made at (960, 480) and (960, 530) landed on nothing - the page's own
+# layout is not the column the coordinates assumed, and a click that misses an entry leaves the caret
+# where it was.
+#
+# TAB IS THE WIDGET'S OWN ROUTE: the page is a GTK form, and focus moves between its entries with Tab just
+# as it does for a person. The first Tab from the page's initial focus reaches the first password field,
+# the second the confirmation, and Return submits the page.
+step "focus the first password field"
+  input 960 520
   click_at [1920, 1080]
   settle 2
 
 
-step "type it"
+step "move to it with Tab, whatever the layout"
+  input tab
+  settle 2
+
+
+step "type the password"
   input text "{{ password }}"
   settle 2
 
 
-step "its confirmation"
-  input 960 530
-  click_at [1920, 1080]
+step "Tab to the confirmation"
+  input tab
   settle 2
 
 
