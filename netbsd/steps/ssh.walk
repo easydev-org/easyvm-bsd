@@ -107,6 +107,122 @@ step "boot the published disk"
 # booted system brings its own interface up and there is nothing to type. `machine_ssh` is the whole test:
 # it dials 172.30.0.2:22, a fact no console can fake.
 
+# THE DISK IS CONFIGURED FROM ITS OWN LOADER PROMPT, BEFORE THE KERNEL EVER STARTS.
+#
+# MEASURED across seven runs, both channels this guest has were proved to carry nothing:
+#
+#	wc -c console.log             -> 0 after a full boot
+#	after `xdm` stops, every frame -> see: 2 word(s): a —
+#
+# AND THE INSTALLER CANNOT DO IT EITHER: three published disks were searched raw for
+#
+#	grep -abo "172.30.0.2"        -> nothing
+#	grep -abo "consdev=com0"      -> only the manual page's copy of the word
+#
+# so neither the `p` nor the `u`/`a` route into sysinst's shell ever opened one.
+#
+# NETBSD'S LOADER PROMPT NEEDS NO SHELL AND NO INSTALLER. The autoboot counts down with
+#
+#	[Enter] boot now, any other key for boot menu...
+#
+# so one keystroke stops it, and `boot -s` then boots SINGLE USER - a root shell with `/` mounted, on the
+# video console, before any of the daemons that would replace it.
+step "stop the autoboot with one keystroke"
+  input text " "
+  settle 3
+
+
+step "the boot prompt is answering"
+  repeat
+    do
+      item
+        settle 3
+      item "read the screen"
+        read
+          name bp
+    until
+      bind up
+      source bp
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      words [[boot], [prompt]]
+    max 20
+
+
+step "boot single user, which is a root shell with / mounted"
+  input text "boot -s"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 25
+
+
+step "single user asks for the shell path"
+  input text "/bin/sh"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 10
+
+
+# THE ROOT FILE SYSTEM IS READ-ONLY IN SINGLE USER; IT IS REMOUNTED BEFORE ANYTHING IS WRITTEN.
+step "remount the root writable"
+  input text "mount -u -w /; echo ROOT_RW"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 6
+
+
+# THE THREE FILES THE NEXT BOOT NEEDS, ONE SHORT COMMAND EACH.
+step "the address, in NetBSD's boot-time form"
+  input text "echo inet 172.30.0.2/24 > /etc/ifconfig.wm0; cat /etc/ifconfig.wm0"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 6
+
+
+step "the same for virtio-net, in case that is the card"
+  input text "cp /etc/ifconfig.wm0 /etc/ifconfig.vio0"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 5
+
+
+# THE DISPLAY MANAGER IS TOLD NOT TO START, so the console stays a console for the next boot's own work.
+step "no display manager, and sshd at boot"
+  input text "echo xdm=NO >> /etc/rc.conf; echo sshd=YES >> /etc/rc.conf; tail -2 /etc/rc.conf"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 6
+
+
+step "continue to multi-user"
+  input text "exit"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 40
+
+
 step "wait for sshd"
   repeat
     until machine_ssh
