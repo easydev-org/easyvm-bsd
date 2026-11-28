@@ -196,6 +196,24 @@ step "run it"
 
 
 
+# THE INTERFACE'S NAME IS READ OFF THE SCREEN BEFORE IT IS WRITTEN INTO A FILE.
+#
+# MEASURED on run 46118802475: every step ran - the shell answered `SU_IS_A_SHELL`, the remount, the
+# ifconfig file, the rc.conf lines and the `exit` - AND THE ADDRESS STILL DID NOT EXIST. A file whose NAME
+# is wrong is ignored silently by rc, which is exactly the failure a person cannot see.
+#
+# `ifconfig -l` prints the names on one line, and this screen reads 720x400 text reliably (the
+# `SU_IS_A_SHELL` answer above proves it).
+step "name the interfaces the kernel has"
+  input text "ifconfig -l"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 5
+
+
 # NETBSD'S ifconfig.if TAKES `netmask`, NOT A CIDR SUFFIX - from ifconfig.if(5) itself:
 #
 #	inet 10.0.1.12 netmask 255.255.255.0 media 100baseTX
