@@ -252,6 +252,8 @@ step "run it"
   settle 6
 
 
+# THE LISTING IS READ, NOT JUST TYPED - a `settle` after a command that was never read is how the last
+# three runs lost theirs.
 step "what ifconfig files exist now"
   input text "ls -l /etc/ifconfig.*"
   settle 2
@@ -260,6 +262,24 @@ step "what ifconfig files exist now"
 step "run it"
   input ret
   settle 5
+
+
+step "the file is on the screen"
+  repeat
+    do
+      item
+        settle 4
+      item "read the screen"
+        read
+          name lsout
+    until
+      bind up
+      source lsout
+      mode text
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[ifconfig]]
+    max 12
 
 
 step "the same for virtio-net, in case that is the card"
