@@ -21,7 +21,7 @@ on:
       from_tag:
         description: >-
           the PUBLISHED disk this stage continues from (default bsd-netbsd-install)
-        default: "bsd-netbsd-install"
+        default: "bsd-netbsd-install-single"
 
 concurrency:
   group: netbsd-ssh

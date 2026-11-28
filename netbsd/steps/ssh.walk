@@ -128,42 +128,27 @@ step "boot the published disk"
 # so one keystroke stops it, and `boot -s` then boots SINGLE USER - a root shell with `/` mounted, on the
 # video console, before any of the daemons that would replace it.
 # A SPACE IS A `key`, NOT A `text` - and any key stops the countdown, so this one is unambiguous.
-step "stop the autoboot with one keystroke"
-  input esc
-  settle 3
-
-
-step "drop to the boot prompt"
-  input text "3"
-  settle 2
-
-
-step "confirm the entry"
-  input ret
-  settle 8
-
-
-step "run it"
-  input ret
-  settle 25
-
-
-step "boot single user from the prompt"
-  input text "boot -s"
-  settle 2
-
-
-step "run it"
-  input ret
-  settle 25
-
-
+# THE DISK BOOTS STRAIGHT INTO SINGLE USER, BECAUSE ITS OWN /boot.cfg SAYS SO.
+#
+# MEASURED from the published disk's /boot.cfg:
+#
+#	menu=Boot normally:rndseed /var/db/entropy-file;boot
+#	menu=Boot single user:rndseed /var/db/entropy-file;boot -s
+#	menu=Drop to boot prompt:prompt
+#	default=1
+#	timeout=5
+#
+# `timeout=5` IS WHY A KEYSTROKE COULD NOT WIN - the countdown is five seconds and the engine cannot
+# promise to type inside it. THE FILE ITSELF WAS CHANGED INSTEAD: `default=2`, one byte, and the loader
+# boots the single-user entry with no key pressed at all. That was verified in the lab pod, where the
+# screen after the change reads
+#
+#	root on ld0a dumps on ld0b
+#	root file system type: ffs
+#	Enter pathname of shell or RETURN for /bin/sh:
+#
+# THE TAG THIS STAGE PULLS IS `bsd-netbsd-install-single`, the same disk with that one byte changed.
 step "single user asks for the shell path"
-  input text "/bin/sh"
-  settle 2
-
-
-step "run it"
   input ret
   settle 10
 
@@ -179,7 +164,7 @@ step "run it"
   settle 6
 
 
-# THE THREE FILES THE NEXT BOOT NEEDS, ONE SHORT COMMAND EACH.
+
 step "the address, in NetBSD's boot-time form"
   input text "echo inet 172.30.0.2/24 > /etc/ifconfig.wm0; cat /etc/ifconfig.wm0"
   settle 2
