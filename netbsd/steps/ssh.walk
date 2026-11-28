@@ -165,8 +165,15 @@ step "run it"
 
 
 
+# NETBSD'S ifconfig.if TAKES `netmask`, NOT A CIDR SUFFIX - from ifconfig.if(5) itself:
+#
+#	inet 10.0.1.12 netmask 255.255.255.0 media 100baseTX
+#
+# and the file is only evaluated "if the interface exists on the system", so the name has to be the one
+# the kernel gave the card. `wm` is what NetBSD calls an e1000, but the unit number is the kernel's - so
+# the file is written for the two names this hardware can take.
 step "the address, in NetBSD's boot-time form"
-  input text "echo inet 172.30.0.2/24 > /etc/ifconfig.wm0; cat /etc/ifconfig.wm0"
+  input text "echo inet 172.30.0.2 netmask 255.255.255.0 > /etc/ifconfig.wm0; cat /etc/ifconfig.wm0"
   settle 2
 
 
@@ -176,7 +183,7 @@ step "run it"
 
 
 step "the same for virtio-net, in case that is the card"
-  input text "cp /etc/ifconfig.wm0 /etc/ifconfig.vio0"
+  input text "cp /etc/ifconfig.wm0 /etc/ifconfig.vio0; cp /etc/ifconfig.wm0 /etc/ifconfig.wm1"
   settle 2
 
 
