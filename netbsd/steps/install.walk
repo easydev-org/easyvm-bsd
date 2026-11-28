@@ -360,10 +360,29 @@ step "leave the timezone list"
 
 # `Configure network` IS NOT TOUCHED: MEASURED, it terminates sysinst at its netmask prompt. See the
 # header. Everything the disk needs is already written at this point.
-step "open the installer's shell, where /mnt is still mounted"
+# `Run /bin/sh` IS TWO MENUS DEEP, AND THAT IS WHY THE LAST THREE RUNS WROTE NOTHING.
+#
+# NetBSD's own installation guide says it plainly:
+#
+#	"Go to the main installation menu, and select Utility menu and then select the Run /bin/sh option,
+#	 which will give you a shell prompt."
+#
+# SO IT IS `u` FOR THE UTILITY MENU AND THEN `a` FOR THE SHELL - not `p`, which is not a key on that
+# screen at all. MEASURED on the disk three runs published: `grep -abo consdev disk.raw` found only the
+# MANUAL PAGE's copy of the word, and `grep -abo 172.30.0.2` found NOTHING - so neither file this step
+# writes had ever been written.
+step "open the utility menu"
   do
     item
-      input text "p"
+      input text "u"
+    item
+      input ret
+      settle 10
+
+step "run a shell, where /mnt is still mounted"
+  do
+    item
+      input text "a"
     item
       input ret
       settle 12
