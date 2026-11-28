@@ -43,6 +43,15 @@ step "boot the published disk"
 
 
 # THE WIZARD'S FIRST PAGE, WHICH IS ALSO THE PROOF THE DISK IS THE ONE THE INSTALL LEFT.
+# THE LOADER'S OWN MENU IS THE WAY IN, AND IT SAYS SO ON THE CONSOLE.
+#
+# MEASURED from this disk's own console.log:
+#
+#	[Enter] boot now, any other key for boot menu
+#
+# so ONE KEY stops the countdown, and the menu it opens carries the single-user entry - a root shell with
+# `/` mounted, before any display manager can swallow a keystroke.
+#
 # THE SINGLE-USER SHELL IS WHERE THE DISK IS CONFIGURED, BECAUSE THE WIZARD LEAVES A DESKTOP.
 #
 # MEASURED across three runs: after the wizard finished, the screen was
@@ -59,6 +68,11 @@ step "boot the published disk"
 # the one place this stage can write /etc/rc.conf without a desktop in the way.
 #
 # THIS IS THE BOOT AFTER THE WIZARD, so the menu is the installed system's own.
+step "stop the autoboot with one keystroke"
+  input esc
+  settle 4
+
+
 step "the loader menu, which is where single user is chosen"
   repeat
     do
@@ -78,11 +92,11 @@ step "the loader menu, which is where single user is chosen"
 
 
 step "take the single-user entry"
-  input text "6"
+  input text "2"
   settle 2
 
 
-step "run it"
+step "confirm it"
   input ret
   settle 20
 
