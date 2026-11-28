@@ -43,6 +43,120 @@ step "boot the published disk"
 
 
 # THE WIZARD'S FIRST PAGE, WHICH IS ALSO THE PROOF THE DISK IS THE ONE THE INSTALL LEFT.
+# THE SINGLE-USER SHELL IS WHERE THE DISK IS CONFIGURED, BECAUSE THE WIZARD LEAVES A DESKTOP.
+#
+# MEASURED across three runs: after the wizard finished, the screen was
+#
+#	see: 8 word(s): ghostbsd-ghostbsd-pc ... GhostBSD User Password
+#
+# - A DISPLAY MANAGER'S LOGIN PANEL. Every keystroke this walk sent after that went into its password
+# field, which is why `machine_ssh` read false while the network was already perfect:
+#
+#	host diag [icmp guest]: ICMP_OK 2/2
+#	host diag [ip neigh]: 172.30.0.2 ... REACHABLE
+#
+# A FREEBBSD LOADER MENU HAS A SINGLE-USER ENTRY, and single-user gives a root shell with `/` mounted -
+# the one place this stage can write /etc/rc.conf without a desktop in the way.
+#
+# THIS IS THE BOOT AFTER THE WIZARD, so the menu is the installed system's own.
+step "the loader menu, which is where single user is chosen"
+  repeat
+    do
+      item
+        settle 5
+      item "read the screen"
+        read
+          name menu
+    until
+      bind up
+      source menu
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      words [[boot, multi, user], [boot, single, user], [autoboot]]
+    max 40
+
+
+step "take the single-user entry"
+  input text "6"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 20
+
+
+step "single user asks for the root shell's path"
+  input ret
+  settle 10
+
+
+step "the root file system is mounted writable"
+  input text "mount -u -w /; echo ROOT_RW"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 6
+
+
+# THREE FILES, AND EACH IS WHAT THE NEXT RUN NEEDS.
+#
+#	sshd_enable          starts the daemon at boot
+#	gdm_enable=NO        keeps the display manager OFF this time, so the console is a text console
+#	ifconfig_<if>        the address, written down - this tap serves no DHCP
+step "turn the display manager off and sshd on"
+  input text "echo sshd_enable=YES >> /etc/rc.conf"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 4
+
+
+step "no display manager this boot"
+  input text "grep -v gdm_enable /etc/rc.conf > /tmp/r"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 3
+
+
+step "append the setting"
+  input text "echo gdm_enable=NO >> /tmp/r; cp /tmp/r /etc/rc.conf"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 4
+
+
+step "the address, in the boot-time form"
+  input text "echo inet 172.30.0.2/24 > /etc/ifconfig.em0; cat /etc/ifconfig.em0"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 5
+
+
+step "continue the boot"
+  input text "exit"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 40
+
+
 step "the first-boot wizard is up"
   repeat
     do
