@@ -368,13 +368,42 @@ step "open the installer's shell, where /mnt is still mounted"
       input ret
       settle 12
 
-step "write the serial console into boot.cfg and prove it"
+# TWO FILES, BECAUSE `consdev` MOVES THE KERNEL'S CONSOLE AND `/etc/ttys` GIVES IT A GETTY.
+#
+# boot.cfg(5): "consdev - Changes the console device to that specified in the value." That moves the
+# kernel's own console to com0. But a console with no getty prints nothing to log in at, and NetBSD ships
+# `tty00` as `off secure` - so it is turned on here, in the same shell where /mnt is still mounted.
+step "write the serial console into boot.cfg"
   do
     item
       input text "echo consdev=com0,115200 > /mnt/boot.cfg; cat /mnt/boot.cfg"
     item
       input ret
       settle 8
+
+step "give that line a getty"
+  do
+    item
+      input text "grep -v ^tty00 /mnt/etc/ttys > /tmp/t"
+    item
+      input ret
+      settle 5
+
+step "append the line"
+  do
+    item
+      input text "echo tty00 /usr/libexec/getty std.9600 vt100 on secure >> /tmp/t"
+    item
+      input ret
+      settle 5
+
+step "install it"
+  do
+    item
+      input text "cp /tmp/t /mnt/etc/ttys; grep ^tty00 /mnt/etc/ttys"
+    item
+      input ret
+      settle 6
 
 step "leave the shell so the installer can finish"
   do
