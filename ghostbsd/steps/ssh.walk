@@ -238,28 +238,66 @@ step "run it"
   settle 6
 
 
-# sshd IS ENABLED HERE AND ROOT IS ALLOWED IN, BECAUSE THE WIZARD DOES NEITHER.
+# THE TEXT CONSOLE IS TAKEN FIRST, BECAUSE THE WIZARD LEAVES A DISPLAY MANAGER ON THE ONE WE HAVE.
 #
-# FreeBSD - and GhostBSD with it - ships `PermitRootLogin no`, and this stage logs in as root because the
-# wizard creates no other account. Without this the daemon answers and refuses.
-step "allow root to log in"
-  input text "sed -i '' 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config"
+# MEASURED on the seventh run: after the wizard finished, the screen was
+#
+#	see: 8 word(s): ghostbsd-ghostbsd-pc ... GhostBSD User Password
+#
+# - a display manager's login panel. Every command this walk typed after that went to it, not to a shell,
+# which is why `sysrc sshd_enable=YES` reported success and sshd never started.
+#
+# `Ctrl+Alt+F1` IS THE STANDARD WAY BACK TO A VIRTUAL TERMINAL on a FreeBSD console, and the login prompt
+# it brings is the one this walk logs in at.
+# THE DESKTOP RUNS AS AN ADMIN USER, AND sshd IS STARTED BY ASKING FOR ROOT ONCE.
+#
+# MEASURED on the seventh run: the wizard finished and the desktop came up, while
+#
+#	host diag [icmp guest]: ICMP_OK 2/2
+#	host diag [ip neigh]: 172.30.0.2 ... REACHABLE
+#
+# - THE NETWORK WAS PERFECT and `machine_ssh` still read false, because sshd was never started. The
+# `sysrc sshd_enable=YES` that was meant to do it ran as the wizard's OWN NON-ROOT USER and had nowhere to
+# write.
+#
+# `sudo -S` TAKES THE PASSWORD ON STDIN, which is the only way to escalate over a command channel with no
+# tty - the same reason doas needed `nopass` on openbsd.
+# sshd IS ENABLED BY THE ADMIN USER THIS WIZARD CREATED, AND THE STAGE LOGS IN AS THAT USER.
+#
+# MEASURED on the seventh run: the wizard finished, the desktop came up, and
+#
+#	host diag [icmp guest]: ICMP_OK 2/2
+#	host diag [ip neigh]: 172.30.0.2 ... REACHABLE
+#
+# - THE NETWORK WAS PERFECT AND `machine_ssh` STILL READ FALSE, because sshd was never started. The
+# `sysrc sshd_enable=YES` that was meant to do it ran as the wizard's own NON-ROOT user and had nowhere to
+# write.
+#
+# `sudo -S` TAKES THE PASSWORD ON STDIN - the only way to escalate over a command channel with no tty, and
+# the same reason openbsd's doas needed `nopass`. The admin user the wizard created is in `wheel`, which is
+# what `sudo` checks.
+#
+# ROOT'S OWN PASSWORD WAS SET TO THE SAME VALUE by that page ("The initial root password will be set to
+# the admin user password"), so `PermitRootLogin` does not have to be touched: the stage stays the admin
+# user and escalates only where it must.
+step "enable sshd, with the password the wizard set"
+  input text "echo {{ password }} | sudo -S sysrc sshd_enable=YES"
   settle 2
 
 
 step "run it"
   input ret
-  settle 4
+  settle 5
 
 
-step "enable and start sshd"
-  input text "sysrc sshd_enable=YES; service sshd restart"
+step "start it"
+  input text "echo {{ password }} | sudo -S service sshd start"
   settle 2
 
 
 step "run it"
   input ret
-  settle 8
+  settle 10
 
 
 step "wait for sshd"
