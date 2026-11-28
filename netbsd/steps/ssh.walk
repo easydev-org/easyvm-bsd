@@ -151,8 +151,19 @@ step "the boot prompt is answering"
     max 20
 
 
-step "boot single user, which is a root shell with / mounted"
-  input text "boot -s"
+# THE SCREEN THAT APPEARS IS THE BOOT **MENU**, WHICH IS NUMBERED - not the `boot>` prompt.
+#
+# MEASURED on the run that stopped the autoboot successfully:
+#
+#	see: 55 word(s): NetBSD/x86 BIOS Boot ... Revision 5.12 ...
+#
+# and `boot -s` typed there selected nothing, because a numbered menu takes a NUMBER. Its entries are the
+# kernel's own, and the single-user one is `3` in the stock menu (`Boot normally` is 1, `Boot single-user`
+# is often 3). The prompt is reached by the entry that offers it.
+#
+# SO THE ENTRY IS TAKEN, AND THE PROMPT IS ASKED FOR IF THE NUMBER DOES NOTHING.
+step "take the single-user entry"
+  input text "3"
   settle 2
 
 
