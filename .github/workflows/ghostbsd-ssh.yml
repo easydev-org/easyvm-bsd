@@ -1,0 +1,57 @@
+name: ghostbsd-ssh
+
+# ghostbsd, AS ITS OWN STAGE. `ghostbsd/steps/ssh.walk` ANSWERS THE FIRST-BOOT WIZARD THAT
+# `install.walk` DELIBERATELY LEAVES UNANSWERED.
+#
+# MEASURED in the lab pod on the published `bsd-ghostbsd-install` disk: it boots into
+#
+#	GhostBSD Initial Setup
+#	Please select your language:
+#
+# and NOT into a usable system - no account, no password, no sshd. That wizard is the `firstboot` half
+# of the install, and this leg is where it runs.
+#
+# THE SHAPE IS THE ONE freebsd-ssh.yml ESTABLISHED. `needs:` does not cross workflows, so the tag is the
+# dependency and `pull:` names it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      disks_repository:
+        description: "the ghcr repository that holds the disks"
+        default: "easydev-org/easyvm-bsd"
+      from_tag:
+        description: >-
+          the PUBLISHED disk this stage continues from (default bsd-ghostbsd-install)
+        default: "bsd-ghostbsd-install"
+
+concurrency:
+  group: ghostbsd-ssh
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  checks: write
+
+jobs:
+  ssh:
+    uses: easydev-org/easyvm/.github/workflows/stage.yml@v0.0.4
+    secrets: inherit
+    with:
+      image_repository: easydev-org/easyvm
+      image_tag: v0.0.4
+      disk_gb: "20"
+      group: ghostbsd-ssh
+      disks_repository: ${{ inputs.disks_repository }}
+      stages: |
+        [
+          {
+            "name": "bsd-ghostbsd-ssh",
+            "file": "ghostbsd/steps/ssh.walk",
+            "pull": "${{ inputs.from_tag }}",
+            "out": "bsd-ghostbsd-ssh.qcow2",
+            "publish": "bsd-ghostbsd-ssh",
+            "timeout": 300
+          }
+        ]
