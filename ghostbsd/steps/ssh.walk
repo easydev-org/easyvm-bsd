@@ -153,7 +153,18 @@ step "type it again"
   settle 3
 
 
-step "finish the wizard"
+# THE PAGE IS SUBMITTED WITH RETURN FROM THE FIELD, WHICH IS WHAT A GTK FORM DOES.
+#
+# MEASURED on the fourth run: after Tab, password, Tab, password, the page GREW from 34 to 42 words -
+# so the typing reached it - and then the click at (1330, 782) did not close it. A `Next` button below
+# a form can be reached by Return from the last field, which is the widget's own activation key, and it
+# does not depend on where the button has been drawn.
+step "submit the page from the last field"
+  input ret
+  settle 10
+
+
+step "and press Next, in case Return only moved focus"
   input 1330 782
   click_at [1920, 1080]
   settle 10
