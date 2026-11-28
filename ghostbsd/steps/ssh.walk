@@ -24,13 +24,13 @@
 walkthrough "ghostbsd 26.3 - the first-boot wizard, sshd, and the desktop"
 resolution 1920x1080
 recording_resolution 1920x1080
-user vmuser
+user root
 var out
   default out/ghostbsd-ssh.qcow2
   from args.out
 password admin1
 var user
-  default vmuser
+  default root
   from args.user
 ssh_port 2222
 
@@ -79,7 +79,22 @@ step "the first-boot wizard is up"
 #
 # `Next` IS AT (1330, 782) ON EVERY PAGE: measured with tesseract's bounding box on the first page,
 # `1316 777 28 9`, and the wizard is one GtkNotebook with a single button box.
-step "advance the wizard page by page"
+# THE WIZARD'S ONLY ACCOUNT PAGE IS THE ROOT PASSWORD, AND THAT IS WHAT IT SAYS.
+#
+# MEASURED on the second run of this stage, which reached the page and read it:
+#
+#	Admin User
+#	The initial root password will be set to ...
+#
+# GhostBSD's first-boot wizard does NOT create a normal user - unlike FreeBSD's `adduser`, which the
+# freebsd stage drives. So there is no `vmuser` to log in as, and the account this stage uses is `root`.
+#
+# THE PAGES BEFORE IT ARE ADVANCED BY READING EACH ONE, because the order was measured to be
+#
+#	GhostBSD Initial Setup -> Keyboard -> Time Zone -> Network -> Admin User
+#
+# and a fixed three clicks was wrong about it.
+step "advance the wizard to the account page"
   repeat
     do
       item "read what the page says"
@@ -95,44 +110,18 @@ step "advance the wizard page by page"
       mode text
       rect [0, 0, 1920, 1080]
       rect_at [1920, 1080]
-      words [[full, name], [user, name], [password], [account]]
+      words [[root, password], [admin, user]]
     max 20
 
 
-
-# THE ACCOUNT PAGE IS THE ONE THAT MATTERS, AND ITS FIELDS ARE FILLED IN ORDER.
-#
-# Each field is CLICKED FIRST so the caret is in it - a GTK entry that was never focused receives
-# nothing - and the column starts below the page's own labels.
-step "the account's full name"
-  input 960 380
-  click_at [1920, 1080]
-  settle 2
-
-
-step "type it"
-  input text "GhostBSD User"
-  settle 2
-
-
-step "the account's user name"
-  input 960 430
-  click_at [1920, 1080]
-  settle 2
-
-
-step "type the account"
-  input text "{{ user }}"
-  settle 2
-
-
-step "the account's password"
+# THE ROOT PASSWORD, TWICE - the page asks for it and its confirmation.
+step "the root password"
   input 960 480
   click_at [1920, 1080]
   settle 2
 
 
-step "type the password"
+step "type it"
   input text "{{ password }}"
   settle 2
 
@@ -148,25 +137,78 @@ step "type it again"
   settle 3
 
 
-# AND THE REST OF THE WIZARD, WHICHEVER PAGES IT STILL HAS.
-step "finish the remaining pages"
+step "finish the wizard"
+  input 1330 782
+  click_at [1920, 1080]
+  settle 10
+
+
+step "the wizard is closed"
   repeat
     do
-      item "read what the page says"
+      item
+        settle 10
+      item "read the screen"
         read
-          name page
-      item "press Next"
-        input 1330 782
-        click_at [1920, 1080]
-        settle 8
+          name done
     until
       bind up
-      source page
+      source done
       mode text
       rect [0, 0, 1920, 1080]
       rect_at [1920, 1080]
-      without [[full, name], [user, name], [password], [account], [ghostbsd, initial, setup]]
-    max 20
+      without [[ghostbsd, initial, setup], [admin, user], [root, password]]
+    max 40
+
+
+
+# THE NETWORK IS WRITTEN DOWN, NOT NEGOTIATED - THE FIFTH STAGE IN THIS REPOSITORY TO FIND THAT.
+#
+# The tap is `172.30.0.1/24` and serves no DHCP. GhostBSD is FreeBSD underneath, so the interface name is
+# the kernel's (`em0` for the e1000 this walk gives it); `ifconfig -l` answers it, FreeBSD's `ifconfig`
+# takes a CIDR suffix, and 172.30.0.2 is the address every guest here uses.
+step "give every real interface the address this cluster uses"
+  input text "for i in $(ifconfig -l); do test $i = lo0 || ifconfig $i inet 172.30.0.2/24; done"
+  settle 3
+
+
+step "run it"
+  input ret
+  settle 8
+
+
+step "the address the guest reports"
+  input text "ifconfig -a | grep 'inet '"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 6
+
+
+# sshd IS ENABLED HERE AND ROOT IS ALLOWED IN, BECAUSE THE WIZARD DOES NEITHER.
+#
+# FreeBSD - and GhostBSD with it - ships `PermitRootLogin no`, and this stage logs in as root because the
+# wizard creates no other account. Without this the daemon answers and refuses.
+step "allow root to log in"
+  input text "sed -i '' 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 4
+
+
+step "enable and start sshd"
+  input text "sysrc sshd_enable=YES; service sshd restart"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 8
 
 
 step "wait for sshd"
