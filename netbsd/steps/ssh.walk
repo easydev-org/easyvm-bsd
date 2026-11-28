@@ -167,6 +167,11 @@ step "take the single-user entry"
   settle 2
 
 
+step "the menu wants the number confirmed"
+  input ret
+  settle 20
+
+
 step "run it"
   input ret
   settle 25
