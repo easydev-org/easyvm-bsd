@@ -373,34 +373,33 @@ step "open the installer's shell, where /mnt is still mounted"
 # boot.cfg(5): "consdev - Changes the console device to that specified in the value." That moves the
 # kernel's own console to com0. But a console with no getty prints nothing to log in at, and NetBSD ships
 # `tty00` as `off secure` - so it is turned on here, in the same shell where /mnt is still mounted.
-step "write the serial console into boot.cfg"
+# THE STATIC ADDRESS GOES INTO THE DISK, SO THE BOOTED SYSTEM IS REACHABLE WITH NO CONSOLE WORK AT ALL.
+#
+# MEASURED across six runs of the next stage: it cannot read this guest. `wc -c serial.log` is 0 after a
+# full boot, and once `xdm` stops the screen draws nothing (`see: 2 word(s): a —`). Every address command
+# the ssh stage typed had no verifiable answer.
+#
+# AN INSTALLER-SIDE FIX NEEDS NO CONSOLE AT ALL. While /mnt is mounted the two files that bring an
+# interface up at boot are written:
+#
+#	/mnt/etc/ifconfig.<if>   the address, in FreeBSD/NetBSD's own boot-time form
+#	/mnt/etc/rc.conf         the interface is up and `dhcpcd` is not wanted
+#
+# THE INTERFACE IS NOT KNOWN HERE, so the walk writes one file for each name the KERNEL might use on this
+# hardware - `vio0` for virtio-net, `wm0` for the e1000 this stage boots with. A file for an interface that
+# does not exist is ignored by rc, which makes this safe.
+step "record the interface the kernel will bring up"
   do
     item
-      input text "echo consdev=com0,115200 > /mnt/boot.cfg; cat /mnt/boot.cfg"
+      input text "echo inet 172.30.0.2/24 > /mnt/etc/ifconfig.wm0; cat /mnt/etc/ifconfig.wm0"
     item
       input ret
-      settle 8
+      settle 6
 
-step "give that line a getty"
+step "and the same for the other name this hardware can take"
   do
     item
-      input text "grep -v ^tty00 /mnt/etc/ttys > /tmp/t"
-    item
-      input ret
-      settle 5
-
-step "append the line"
-  do
-    item
-      input text "echo tty00 /usr/libexec/getty std.9600 vt100 on secure >> /tmp/t"
-    item
-      input ret
-      settle 5
-
-step "install it"
-  do
-    item
-      input text "cp /tmp/t /mnt/etc/ttys; grep ^tty00 /mnt/etc/ttys"
+      input text "cp /mnt/etc/ifconfig.wm0 /mnt/etc/ifconfig.vio0; ls /mnt/etc/ifconfig.*"
     item
       input ret
       settle 6

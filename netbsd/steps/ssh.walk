@@ -253,28 +253,16 @@ step "run it"
 # command can serve whichever interface the kernel named:
 #
 #	for i in $(ifconfig -l); do test $i = lo0 || ifconfig $i inet 172.30.0.2/24; done
-step "give every real interface the address this cluster uses"
-  input text "for i in $(ifconfig -l); do test $i = lo0 || ifconfig $i inet 172.30.0.2/24; done"
-  settle 3
-
-
-step "run it"
-  input ret
-  settle 8
-
-
-step "what does the guest say its addresses are"
-  input text "ifconfig -a | grep 'inet '"
-  settle 2
-
-
-step "run it"
-  input ret
-  settle 6
-
-
-step "record the address for the next boot"
-  input text "for i in $(ifconfig -l); do test $i = lo0 || echo inet 172.30.0.2/24>/etc/ifconfig.$i; done"
+# THE ADDRESS IS ALREADY ON THE DISK - `install.walk` WROTE /etc/ifconfig.<if> WHEN IT INSTALLED.
+#
+# MEASURED across six runs: this guest cannot be driven by console. Its serial line is silent
+# (`wc -c serial.log` = 0) and its screen goes blank the moment `xdm` stops. So the address is not typed
+# here at all; the booted system brings its own interface up from the file the installer left.
+#
+# `SHELL_OK` BELOW IS THE ONE THING STILL TYPED, and it is not needed to configure anything - it proves the
+# console half works, which is what a person reading console.log would want to know.
+step "the shell answers, if the console is readable at all"
+  input text "echo SHELL_OK"
   settle 2
 
 
@@ -283,20 +271,6 @@ step "run it"
   settle 5
 
 
-# THE ADDRESS IS PROVED BY THE HOST'S OWN DIAL, not by a word on the screen - `machine_ssh` is that dial.
-# THE PROOF IS THE HOST'S OWN DIAL, NOT A WORD ON A SCREEN.
-#
-# MEASURED on run 508e69d's run: after `xdm` was stopped, every frame this gate read was
-#
-#	see: 2 word(s): a —
-#
-# TWO WORDS, because stopping the display manager leaves the console on a vt that is drawing nothing -
-# and the address HAD been written (`ifconfig $i inet 172.30.0.2/24` ran, and the host's own diagnosis
-# still read `ip neigh FAILED`, so the link was the open question, not the command).
-#
-# `machine_ssh` DIALS 172.30.0.2:22. It is a fact neither the console nor a shell variable can fake, and
-# it is exactly the fact this stage exists to establish. The `wait for sshd` step that follows IS that
-# probe.
 
 step "wait for sshd"
   repeat
