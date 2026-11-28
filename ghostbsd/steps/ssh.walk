@@ -38,19 +38,22 @@ ssh_port 2222
 step "boot the published disk"
   boot
     machine "q35,accel=kvm,vmport=off"
-    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "8192"], ["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "e1000,netdev=net0,mac=52:54:00:56:4d:01"]]
+    args [["-cpu", "Skylake-Client-v4"], ["-smp", "4"], ["-m", "8192"], ["-boot", "menu=on,splash-time=30000"], ["-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd"], ["-drive", "if=pflash,format=raw,file=OVMF_VARS.fd"], ["-device", "VGA,xres=1920,yres=1080,vgamem_mb=32"], ["-device", "qemu-xhci,id=xhci"], ["-device", "usb-tablet,bus=xhci.0"], ["-device", "usb-kbd,bus=xhci.0"], ["-drive", "file=disk.qcow2,if=none,format=qcow2,discard=unmap,id=target"], ["-device", "virtio-blk-pci,drive=target,bootindex=0"], ["-audiodev", "none,id=snd0"], ["-device", "ich9-intel-hda"], ["-device", "hda-duplex,audiodev=snd0"], ["-netdev", "tap,id=net0,ifname=qemutap0,script=no,downscript=no"], ["-device", "e1000,netdev=net0,mac=52:54:00:56:4d:01"]]
     timeout 900
 
 
 # THE WIZARD'S FIRST PAGE, WHICH IS ALSO THE PROOF THE DISK IS THE ONE THE INSTALL LEFT.
 # THE LOADER'S OWN MENU IS THE WAY IN, AND IT SAYS SO ON THE CONSOLE.
 #
-# MEASURED from this disk's own console.log:
+# `-boot menu=on,splash-time=30000` MAKES THE LOADER STOP BY ITSELF, which one keystroke did not.
 #
-#	[Enter] boot now, any other key for boot menu
+# MEASURED: `input esc` at the countdown left the disk booting straight through to
 #
-# so ONE KEY stops the countdown, and the menu it opens carries the single-user entry - a root shell with
-# `/` mounted, before any display manager can swallow a keystroke.
+#	see: 39 word(s): GhostBSD Initial Setup ... Please select your language
+#
+# - the wizard's desktop, and every later command went into its login panel. A keystroke has to land
+# inside a window that is a second or two wide; `menu=on` holds the loader's own menu open for the
+# splash-time instead, which is the difference between racing a countdown and reading a menu.
 #
 # THE SINGLE-USER SHELL IS WHERE THE DISK IS CONFIGURED, BECAUSE THE WIZARD LEAVES A DESKTOP.
 #
@@ -68,11 +71,6 @@ step "boot the published disk"
 # the one place this stage can write /etc/rc.conf without a desktop in the way.
 #
 # THIS IS THE BOOT AFTER THE WIZARD, so the menu is the installed system's own.
-step "stop the autoboot with one keystroke"
-  input esc
-  settle 4
-
-
 step "the loader menu, which is where single user is chosen"
   repeat
     do
