@@ -163,7 +163,7 @@ step "the boot prompt is answering"
 #
 # SO THE ENTRY IS TAKEN, AND THE PROMPT IS ASKED FOR IF THE NUMBER DOES NOTHING.
 step "take the single-user entry"
-  input text "3"
+  input text "2"
   settle 2
 
 
