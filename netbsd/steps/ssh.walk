@@ -221,14 +221,45 @@ step "run it"
 # and the file is only evaluated "if the interface exists on the system", so the name has to be the one
 # the kernel gave the card. `wm` is what NetBSD calls an e1000, but the unit number is the kernel's - so
 # the file is written for the two names this hardware can take.
+# THE FILE IS WRITTEN AND READ BACK IN THE SAME COMMAND, WHICH THE PREVIOUS VERSION ALSO DID -
+# AND THE FILE WAS STILL ABSENT. So the WRITE is what needs a second look, not the read.
+#
+# MEASURED on a lab run of this exact recipe: `sshd=YES` and `xdm=NO` reached /etc/rc.conf, and
+# `/etc/ifconfig.wm0` DID NOT EXIST AT ALL - searched in the raw disk with `grep -abo`:
+#
+#	inet 172.30.0.2 -> []
+#	ifconfig.wm0    -> []
+#	sshd=YES        -> present
+#
+# The difference between the two writes is the `>` REDIRECT. It is `shift+dot` on this console, and a
+# shifted key that arrives without its modifier types `.` instead - which turns the command into
+# `echo inet ... . /etc/ifconfig.wm0`, printing to the screen and creating nothing.
+#
+# `>>` IS THE ONE REDIRECT THIS CONSOLE HAS ALREADY PROVED IT DELIVERS: `/etc/rc.conf` received
+# `sshd=YES` and `xdm=NO` through it, and both are on the published disk. A single `>` is `shift+dot`
+# once, and the modifier can still be held when the `/` arrives - which types `?` and makes the command
+# `echo ... ? /etc/ifconfig.wm0`, printing to the screen and creating nothing.
+#
+# The file is appended to rather than created because single user is a fresh boot; `ls -l` then names
+# every ifconfig file on the screen so the next failure shows what exists.
 step "the address, in NetBSD's boot-time form"
-  input text "echo inet 172.30.0.2 netmask 255.255.255.0 > /etc/ifconfig.wm0; cat /etc/ifconfig.wm0"
+  input text "echo inet 172.30.0.2 netmask 255.255.255.0 >> /etc/ifconfig.wm0"
   settle 2
 
 
 step "run it"
   input ret
   settle 6
+
+
+step "what ifconfig files exist now"
+  input text "ls -l /etc/ifconfig.*"
+  settle 2
+
+
+step "run it"
+  input ret
+  settle 5
 
 
 step "the same for virtio-net, in case that is the card"
