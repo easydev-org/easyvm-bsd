@@ -65,48 +65,47 @@ step "the first-boot wizard is up"
 #
 # `Next` IS AT THE SAME PLACE ON EVERY PAGE because the wizard is a GtkNotebook with one button box -
 # measured at (1330, 782) in the 1920x1080 frame.
-step "language - Next, with English already the selection"
-  input 1330 782
-  click_at [1920, 1080]
-  settle 6
-
-
-step "keyboard - Next"
-  input 1330 782
-  click_at [1920, 1080]
-  settle 6
-
-
-step "timezone - Next"
-  input 1330 782
-  click_at [1920, 1080]
-  settle 6
-
-
-step "the account page, which is what makes this disk loggable"
+# THE WIZARD'S PAGES ARE ADVANCED ONE AT A TIME, WITHOUT ASSUMING HOW MANY THERE ARE.
+#
+# MEASURED on the first run of this stage: the wizard went
+#
+#	GhostBSD Initial Setup -> Please select your language
+#	                      -> Network / "Network card connected to the internet"
+#	                      -> (and stayed there, because this walk expected an account page next)
+#
+# SO EACH PAGE IS WAITED FOR BY WHAT IT SAYS, ADVANCED, AND THE NEXT ONE IS READ - a fixed sequence of
+# three clicks was wrong about the order, and a click that lands on a page that has not drawn goes
+# nowhere.
+#
+# `Next` IS AT (1330, 782) ON EVERY PAGE: measured with tesseract's bounding box on the first page,
+# `1316 777 28 9`, and the wizard is one GtkNotebook with a single button box.
+step "advance the wizard page by page"
   repeat
     do
-      item
-        settle 6
-      item "read the screen"
+      item "read what the page says"
         read
-          name acct
+          name page
+      item "press Next"
+        input 1330 782
+        click_at [1920, 1080]
+        settle 6
     until
       bind up
-      source acct
+      source page
       mode text
       rect [0, 0, 1920, 1080]
       rect_at [1920, 1080]
-      words [[full, name], [user, name], [password], [username]]
-    max 40
+      words [[full, name], [user, name], [password], [account]]
+    max 20
 
 
-# THE FIELDS ARE CLICKED IN ORDER AND TYPED, BECAUSE THE WIZARD WILL NOT ADVANCE WITHOUT A USER.
+
+# THE ACCOUNT PAGE IS THE ONE THAT MATTERS, AND ITS FIELDS ARE FILLED IN ORDER.
 #
-# The three fields sit in one column; each is clicked first so the caret is in it, because a GTK entry
-# that was never focused receives nothing.
+# Each field is CLICKED FIRST so the caret is in it - a GTK entry that was never focused receives
+# nothing - and the column starts below the page's own labels.
 step "the account's full name"
-  input 960 420
+  input 960 380
   click_at [1920, 1080]
   settle 2
 
@@ -117,7 +116,7 @@ step "type it"
 
 
 step "the account's user name"
-  input 960 470
+  input 960 430
   click_at [1920, 1080]
   settle 2
 
@@ -128,7 +127,7 @@ step "type the account"
 
 
 step "the account's password"
-  input 960 520
+  input 960 480
   click_at [1920, 1080]
   settle 2
 
@@ -139,7 +138,7 @@ step "type the password"
 
 
 step "its confirmation"
-  input 960 570
+  input 960 530
   click_at [1920, 1080]
   settle 2
 
@@ -149,67 +148,27 @@ step "type it again"
   settle 3
 
 
-step "finish the wizard"
-  input 1330 782
-  click_at [1920, 1080]
-  settle 10
-
-
-step "the wizard is done and the desktop is coming up"
+# AND THE REST OF THE WIZARD, WHICHEVER PAGES IT STILL HAS.
+step "finish the remaining pages"
   repeat
     do
-      item
-        settle 10
-      item "read the screen"
+      item "read what the page says"
         read
-          name desk
+          name page
+      item "press Next"
+        input 1330 782
+        click_at [1920, 1080]
+        settle 8
     until
       bind up
-      source desk
+      source page
       mode text
       rect [0, 0, 1920, 1080]
       rect_at [1920, 1080]
-      without [[ghostbsd, initial, setup], [please, select, your, language]]
-    max 60
+      without [[full, name], [user, name], [password], [account], [ghostbsd, initial, setup]]
+    max 20
 
 
-# THE NETWORK IS WRITTEN DOWN, NOT NEGOTIATED - THE SAME FINDING FOUR STAGES IN THIS REPOSITORY REACHED.
-#
-# The tap is `172.30.0.1/24` and serves no DHCP. GhostBSD is FreeBSD underneath, so the interface is a
-# `re`/`em`/`vtnet` name the kernel chooses; `ifconfig -l` answers it. FreeBSD's `ifconfig` takes a CIDR
-# suffix, and the address is the one every guest here uses.
-step "give every real interface the address this cluster uses"
-  input text "for i in $(ifconfig -l); do test $i = lo0 || ifconfig $i inet 172.30.0.2/24; done"
-  settle 3
-
-
-step "run it"
-  input ret
-  settle 8
-
-
-step "the address the guest reports"
-  input text "ifconfig -a | grep 'inet '"
-  settle 2
-
-
-step "run it"
-  input ret
-  settle 6
-
-
-# sshd IS ENABLED HERE, BECAUSE THE WIZARD DOES NOT ENABLE IT.
-step "enable sshd, which the wizard does not"
-  input text "sysrc sshd_enable=YES; service sshd start"
-  settle 3
-
-
-step "run it"
-  input ret
-  settle 8
-
-
-# THE PROOF IS THE HOST'S OWN DIAL OF 172.30.0.2:22.
 step "wait for sshd"
   repeat
     until machine_ssh
