@@ -119,37 +119,30 @@ step "the boot loader started the installed file system"
     max 60
 
 
-step "the console login prompt is up"
-  repeat
-    do
-      item
-        settle 15
-      item "read the screen"
-        read
-          name login
-    until
-      bind up
-      source login
-      mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      scale 1
-      # `login` IS WHAT THE PROMPT SAYS AND `Losin` IS WHAT OCR MAKES OF IT.
-      #
-      # MEASURED on run 46021818421, whose every frame read:
-      #
-      #	see: 4 word(s): Losin | BSD h
-      #
-      # at four words on the whole screen - the `g` and the colon are gone, and a gate on `login`
-      # cannot pass however long it waits. THIS IS THE SAME FAILURE openbsd's smoke.walk records for
-      # its panel: `Login:` OCRs as `togin:`, and one run spent its whole budget on it.
-      #
-      # SO THE GATE ASKS FOR `BSD`, WHICH IS THE STRONGEST WORD THIS SCREEN ACTUALLY CARRIES: the
-      # kernel's own version banner prints it, and the same four-word read shows it intact where
-      # `login` is not. A prompt that is up has it; a disk that never booted has nothing on screen.
-      words [[BSD], [bsd]]
-    max 60
-
+# THE PROMPT IS READ FROM THE SERIAL FILE, BECAUSE THIS GUEST DRAWS NOTHING TO THE SCREEN ONCE XDM STOPS.
+#
+# MEASURED across four runs: after `xdm` was stopped, every frame read
+#
+#	see: 2 word(s): a —
+#
+# and before that, `wc -c serial.log` was 0 after a full boot - so neither channel carried a prompt. That
+# is why this stage never published.
+#
+# `install.walk` NOW WRITES `consdev=com0,115200` INTO `/boot.cfg`, which is boot.cfg(5)'s documented
+# switch:
+#
+#	consdev  Changes the console device to that specified in the value.
+#
+# The kernel and getty then put their console on the serial line - which is `console.log`, the file the
+# engine already writes and `until ... from console` already reads, exactly as smartos, omnios and
+# openbsd do.
+#
+# TYPING STILL GOES TO THE KEYBOARD: `input text` is a PS/2 event and NetBSD keeps `pc0` as a second
+# console when `consdev` names the serial one.
+step "the serial line shows a login prompt"
+  until "login:"
+  from console
+  timeout 600
 
 step "log in as root"
   input text "{{ user }}"
@@ -171,31 +164,27 @@ step "enter it"
   settle 8
 
 
-step "the shell is a root prompt"
-  repeat
-    do
-      item
-        settle 4
-      item "read the screen"
-        read
-          name sh
-    until
-      bind up
-      source sh
-      mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      scale 1
-      # THE SHELL PROMPT IS A SINGLE `#` AND OCR IS UNRELIABLE ON THIS SCREEN, so the gate asks for
-      # the absence of the login prompt instead: a `Psassword`/`Password` line means the name was not
-      # accepted, and anything else means the shell is up.
-      without [[password], [psassword], [login], [losin]]
-    max 30
+# THE SHELL IS PROVED BY A COMMAND, AND ITS ANSWER IS READ FROM THE SERIAL FILE.
+#
+# A root prompt is a single `#` and OCR drops it; the previous gate therefore asked for the ABSENCE of
+# `password`, which a blank screen satisfies. That is the same class of gate this repository keeps
+# paying for. `echo` + a marker is a fact the console cannot fake, and with `consdev=com0` its answer
+# lands in a file.
+step "the console is a shell"
+  input text "echo SHELL_OK > /dev/console"
+  settle 3
 
 
-# THE INTERFACE'S NAME IS ASKED FOR, NOT ASSUMED. The card is virtio-net, whose NetBSD driver is
-# `vtnet`, but the unit number is the kernel's to choose and a walk that writes `vtnet0` without
-# looking would configure nothing on a machine that called it `vioif0`.
+step "run it"
+  input ret
+  settle 8
+
+
+step "it answered on the serial line"
+  until "SHELL_OK"
+  from console
+  timeout 180
+
 step "list the interfaces the kernel has"
   input text "ifconfig -l"
   settle 2

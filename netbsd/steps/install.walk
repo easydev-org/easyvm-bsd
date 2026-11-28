@@ -500,6 +500,43 @@ step "the completion notice"
       input ret
       settle 12
 
+# THE CONSOLE IS PUT ON THE SERIAL LINE, BECAUSE THIS GUEST WRITES NOTHING TO IT BY DEFAULT AND THE NEXT
+# STAGE HAS NO OTHER CHANNEL IT CAN READ.
+#
+# MEASURED twice: `wc -c serial.log` is 0 after a full BIOS boot of the published disk. The screen is
+# the only console, and once `xdm` stops it draws nothing at all - `see: 2 word(s): a —` - so every
+# command the ssh stage types has no readable answer.
+#
+# `consdev=com0,115200` IN `/boot.cfg` IS THE DOCUMENTED SWITCH, from boot.cfg(5):
+#
+#	consdev  Changes the console device to that specified in the value.
+#
+# and `p: Run /bin/sh` on the installer's configuration menu is where the new root is still mounted, so
+# the file can be written and read back before the machine stops.
+step "open the installer's shell, where /mnt is still mounted"
+  do
+    item
+      input text "p"
+    item
+      input ret
+      settle 12
+
+step "write the serial console into boot.cfg and prove it"
+  do
+    item
+      input text "echo consdev=com0,115200 > /mnt/boot.cfg; cat /mnt/boot.cfg"
+    item
+      input ret
+      settle 8
+
+step "leave the shell so the installer can finish"
+  do
+    item
+      input text "exit"
+    item
+      input ret
+      settle 10
+
 # `d: Reboot the computer` SYNCS AND UNMOUNTS; THEN THE MACHINE BOOTS THE MEDIUM AGAIN.
 #
 # MEASURED on CI run 45890377885, the first run with this ending: the disk came out 1,643 MiB with
