@@ -166,7 +166,7 @@ step "single user is a root shell"
   repeat
     do
       item "print something the shell has to answer"
-        input text "echo ROOT_SHELL"
+        input text "echo SU_IS_A_SHELL"
         settle 2
       item "run it"
         input ret
@@ -178,9 +178,9 @@ step "single user is a root shell"
       bind up
       source sh
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      words [[ROOT_SHELL]]
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
+      words [[SU_IS_A_SHELL]]
     max 15
 
 
@@ -308,8 +308,8 @@ step "the display manager replaced the text console"
       bind up
       source desk
       mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
+      rect [0, 0, 720, 400]
+      rect_at [720, 400]
       scale 1
       without [[login], [root@]]
     max 40
