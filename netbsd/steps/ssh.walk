@@ -153,6 +153,37 @@ step "single user asks for the shell path"
   settle 10
 
 
+# A GATE BEFORE ANYTHING IS TYPED, BECAUSE THIS STAGE HAD NONE AND EVERY COMMAND WENT SOMEWHERE UNKNOWN.
+#
+# MEASURED on run 46115828630's daemon.log: NOT ONE `see:` LINE IN THE WHOLE RUN. The walk typed the
+# address, the rc.conf lines and the copies at a screen it never read, so a single-user shell that never
+# opened and one that did were indistinguishable - and the host's `ip neigh FAILED` was the only evidence
+# either way.
+#
+# THE SINGLE-USER SHELL PRINTS `#` AND NOTHING ELSE ON THE LINE, which is what a person looks for. The
+# gate waits for it, and the address step below is only reached if it is there.
+step "single user is a root shell"
+  repeat
+    do
+      item "print something the shell has to answer"
+        input text "echo ROOT_SHELL"
+        settle 2
+      item "run it"
+        input ret
+        settle 4
+      item "read the screen"
+        read
+          name sh
+    until
+      bind up
+      source sh
+      mode text
+      rect [0, 0, 1920, 1080]
+      rect_at [1920, 1080]
+      words [[ROOT_SHELL]]
+    max 15
+
+
 # THE ROOT FILE SYSTEM IS READ-ONLY IN SINGLE USER; IT IS REMOUNTED BEFORE ANYTHING IS WRITTEN.
 step "remount the root writable"
   input text "mount -u -w /; echo ROOT_RW"
