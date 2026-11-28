@@ -159,33 +159,48 @@ step "type it again"
 # so the typing reached it - and then the click at (1330, 782) did not close it. A `Next` button below
 # a form can be reached by Return from the last field, which is the widget's own activation key, and it
 # does not depend on where the button has been drawn.
-step "submit the page from the last field"
+# THE PAGE IS SUBMITTED BY TABBING TO THE BUTTON AND PRESSING RETURN.
+#
+# MEASURED on the fifth run: after Tab, password, Tab, password, Return, and a click at (1330, 782), the
+# page was STILL on screen at 42 words. A GTK form whose last entry has an activate handler consumes
+# Return itself; the button is reached by Tabbing past the last field, and Return then presses it.
+step "Tab past the last field to the button"
+  input tab
+  settle 2
+
+
+step "press it"
   input ret
   settle 10
 
 
-step "and press Next, in case Return only moved focus"
+step "and click Next in case focus was elsewhere"
   input 1330 782
   click_at [1920, 1080]
   settle 10
 
 
-step "the wizard is closed"
+# THE WIZARD'S ABSENCE IS NOT PROOF IT FINISHED - a blank screen satisfies `without`.
+#
+# MEASURED on the fifth run: this gate passed while the Admin User page was still on screen at 42 words,
+# because `without` is true of a frame that changed to something else. The desktop has to be SEEN:
+# GhostBSD's MATE panel draws `Applications` and `Places` in its top bar, and nothing else here does.
+step "the desktop the wizard leaves behind is up"
   repeat
     do
       item
         settle 10
       item "read the screen"
         read
-          name done
+          name desk
     until
       bind up
-      source done
+      source desk
       mode text
       rect [0, 0, 1920, 1080]
       rect_at [1920, 1080]
-      without [[ghostbsd, initial, setup], [admin, user], [root, password]]
-    max 40
+      words [[applications], [places], [ghostbsd]]
+    max 60
 
 
 
