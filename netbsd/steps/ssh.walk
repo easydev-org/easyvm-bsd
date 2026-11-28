@@ -133,43 +133,24 @@ step "stop the autoboot with one keystroke"
   settle 3
 
 
-step "the boot prompt is answering"
-  repeat
-    do
-      item
-        settle 3
-      item "read the screen"
-        read
-          name bp
-    until
-      bind up
-      source bp
-      mode text
-      rect [0, 0, 1920, 1080]
-      rect_at [1920, 1080]
-      words [[boot], [prompt]]
-    max 20
-
-
-# THE SCREEN THAT APPEARS IS THE BOOT **MENU**, WHICH IS NUMBERED - not the `boot>` prompt.
-#
-# MEASURED on the run that stopped the autoboot successfully:
-#
-#	see: 55 word(s): NetBSD/x86 BIOS Boot ... Revision 5.12 ...
-#
-# and `boot -s` typed there selected nothing, because a numbered menu takes a NUMBER. Its entries are the
-# kernel's own, and the single-user one is `3` in the stock menu (`Boot normally` is 1, `Boot single-user`
-# is often 3). The prompt is reached by the entry that offers it.
-#
-# SO THE ENTRY IS TAKEN, AND THE PROMPT IS ASKED FOR IF THE NUMBER DOES NOTHING.
-step "take the single-user entry"
-  input text "2"
+step "drop to the boot prompt"
+  input text "3"
   settle 2
 
 
-step "the menu wants the number confirmed"
+step "confirm the entry"
   input ret
-  settle 20
+  settle 8
+
+
+step "run it"
+  input ret
+  settle 25
+
+
+step "boot single user from the prompt"
+  input text "boot -s"
+  settle 2
 
 
 step "run it"
