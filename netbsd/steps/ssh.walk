@@ -127,8 +127,9 @@ step "boot the published disk"
 #
 # so one keystroke stops it, and `boot -s` then boots SINGLE USER - a root shell with `/` mounted, on the
 # video console, before any of the daemons that would replace it.
+# A SPACE IS A `key`, NOT A `text` - and any key stops the countdown, so this one is unambiguous.
 step "stop the autoboot with one keystroke"
-  input text " "
+  input esc
   settle 3
 
 
